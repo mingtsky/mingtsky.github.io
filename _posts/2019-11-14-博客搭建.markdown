@@ -1,43 +1,44 @@
 ---
 layout: post
-title:  "Coding Post"
-description: An example post which shows code rendering.
-date:   2019-05-23 21:03:36 +0530
-categories: Javascript NodeJS
+title:  "博客搭建"
+description: 干渴是渴望吗
+date:   2019-11-14
+tags: 环境搭建
 excerpt_separator: ~~~
 ---
-1.下载软件
-msys2-x86_64-20190524.exe(官网)(可能会在rubyinstaller下载时会有勾选,不用管,重复下载也行)
-rubyinstaller-2.6.5-1-x64.exe(官网)(WITH DEVKIT带DEVKIT的版本)(下载时全选)(下载后不用再附加下载其他东西)
-~~~
+干渴是渴望吗
+~~~  
+## 1.下载软件
+msys2-x86_64-20190524.exe(官网)(可能会在rubyinstaller下载时会有勾选,不用管,重复下载也行)  
+rubyinstaller-2.6.5-1-x64.exe(官网)(WITH DEVKIT带DEVKIT的版本)(下载时全选)(下载后不用再附加下载其他东西)  
 ![My helpful screenshot](/assets/img/1.png)
 
-2.下载包
-修改到国内镜像源
+## 2.下载包
+修改到国内镜像源  
 gem install jekyll bundler(如果不行,分开下,先下bundler,再下jekyll)
 
-3.从jekyll官网下载主题
-http://jekyllthemes.org/themes/
+## 3.从jekyll官网下载主题
+http://jekyllthemes.org/themes/  
 (这里下载的是texture,下载完后是texture-master.zip)
 
-4.进入.......\Cloud\texture-master目录
-该添加的按 https://github.com/thelehhman/texture 添加
+## 4.进入.......\Cloud\texture-master目录
+该添加的按 https://github.com/thelehhman/texture 添加  
 修改_config.yml文件的baseurl,将其置为空(不然放上github会打不开网页或者本地获取不到图片等(除非加上baseurl的texture/))
 
-5.本地运行(在texture-master目录目录下)
-bundle install (安装依赖库)
+## 5.本地运行(在texture-master目录目录下)
+bundle install (安装依赖库)  
 bundle exec jekyll serve (执行,注:不要用jekyll serve,会出错)
 
-6.上传到github的mingtsky.github.io仓库(上传时不用上传全部其实,本地运行时安装的依赖库就没必要上传)
-在texture-master目录下:
-git init (初始化,会在目录下创建一个.git文件夹)
-git add . (添加到本地缓存)
-git commit -m "修改提示"
-git remote add origin git@github.com:mingtsky/mingtsky.github.io.git (如果已有,可通过git remote rm origin清空记录)
+## 6.上传到github的mingtsky.github.io仓库(上传时不用上传全部其实,本地运行时安装的依赖库就没必要上传)
+在texture-master目录下:  
+git init (初始化,会在目录下创建一个.git文件夹)  
+git add . (添加到本地缓存)  
+git commit -m "修改提示"  
+git remote add origin git@github.com:mingtsky/mingtsky.github.io.git (如果已有,可通过git remote rm origin清空记录)  
 git push -u origin master (上传到仓库)(第一次上传后,都用git push上传)
 
-7.写文章时就往_post直接添加md文件就行,图片往/assets/img添加
+## 7.写文章时就往_post直接添加md文件就行,图片往/assets/img添加
 
-参考文章:
-1.https://blog.csdn.net/u012168038/article/details/77715439 (git的部分看这个)
+## 参考文章:
+1.https://blog.csdn.net/u012168038/article/details/77715439 (git的部分看这个)   
 2.https://www.cnblogs.com/zjjDaily/p/8695978.html (很全和关键)

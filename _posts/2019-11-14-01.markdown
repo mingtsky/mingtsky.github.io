@@ -7,7 +7,8 @@ tags: python php 命令执行
 excerpt_separator: ~~~
 ---
 你无法同时拥有
-~~~
+~~~  
+## Ready
 页面有提示www.tar.gz ,此为文件格式,应该是添加在url路径后面将该文件下载下来.下载下来后发现有3000份左右的php文件,随便打开几个文件查看,发现里面有很多$_GET['...'],$_POST['...'],assert,eval,system之类的
 ![My helpful screenshot](/assets/img/2019-11-14-01/2019-11-14 (5).png)
 判断这里的文件中有一个文件里面的某个参数存在命令执行/代码执行漏洞(shell),类似eval($_GET[xx]) 或者 system($_GET[xx]),于是用了一个大佬写的脚本(已修改)

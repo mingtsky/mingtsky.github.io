@@ -1,13 +1,13 @@
 ---
 layout: post
 title:  "2019-11-16-01"
-description: 凭感觉走
+description: 深呼吸,感受这世界的气息
 date:   2019-11-16
 tags: python session伪造 Unicode欺骗
 excerpt_separator: ~~~
 ---
-凭感觉走
-~~~
+深呼吸,感受这世界的气息
+~~~  
 writeup参考:
 {% highlight python%}
 https://skysec.top/2018/11/12/2018-HCTF-Web-Writeup/#admin

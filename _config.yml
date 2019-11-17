@@ -23,7 +23,7 @@ sass:
 # Build settings
 # theme: texture
 
-permalink: /posts/:title/
+permalink: /posts/:year/:month/:day/:title/
 plugins:
   - jekyll-seo-tag
 #  - jekyll-feed

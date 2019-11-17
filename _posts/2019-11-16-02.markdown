@@ -1,52 +1,13 @@
 ---
 layout: post
 title: "2019-11-16-02"
-description: An example post which shows code rendering.
+description: 中二奔二
 date: 2019-11-16
 tags: 文件上传 zip 软连接
 excerpt_separator: ~~~
 ---
+中二奔二
+~~~  
 writeup参考:https://xz.aliyun.com/t/2589
 知识点:
 1.上传zip文件时,存在任意文件读取漏洞,通过构造软连接完成
-~~~
-# 文件: _config.yml
-{% highlight css%}
-.post-tags {
-	list-style-type: none;
-	padding: 0;
-	li {
-		float: left;
-		padding: 10px 20px;
-		background-color: $lightGray;
-		color: #000;
-		margin: 5px;
-		border-radius: 20px;
-		@include fluidType(15px, 17px);
-		&:first-child {
-			margin-left: 0;
-		}
-	}
-}
-{% endhighlight %}
-(注:如果你确信你的站点只在域名的根 URL 下做展示，你可以不使用 {{ site.url }} 变量。在这种情况下，直接使用 /path/file.jpg 即可。)
-![My helpful screenshot](/assets/img/1.png)
-… 你可以直接 [下载 PDF]({{ site.url }}/assets/mydoc.pdf).
-```css
-.post-tags {
-	list-style-type: none;
-	padding: 0;
-	li {
-		float: left;
-		padding: 10px 20px;
-		background-color: $lightGray;
-		color: #000;
-		margin: 5px;
-		border-radius: 20px;
-		@include fluidType(15px, 17px);
-		&:first-child {
-			margin-left: 0;
-		}
-	}
-}
-```

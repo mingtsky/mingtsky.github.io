@@ -1,10 +1,13 @@
 ---
 layout: post
 title:  "2019-11-14-01"
-description: An example post which shows code rendering.
-date:   2019-05-23 21:03:36 +0530
-categories: Javascript NodeJS
+description: 樱花落下的速度是每秒五厘米
+date:   2019-11-14
+categories: 文件上传 zip 软连接 python session伪造 重要信息文件
+excerpt_separator: ~~~
 ---
+樱花落下的速度是每秒五厘米
+~~~  
 hide and seek:
 writeup参考:https://www.anquanke.com/post/id/163974#h2-4 https://skysec.top/2018/11/12/2018-HCTF-Web-Writeup/#hide-and-seek
 知识点:
