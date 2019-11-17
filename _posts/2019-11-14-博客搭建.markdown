@@ -4,10 +4,12 @@ title:  "Coding Post"
 description: An example post which shows code rendering.
 date:   2019-05-23 21:03:36 +0530
 categories: Javascript NodeJS
+excerpt_separator: ~~~
 ---
 1.下载软件
 msys2-x86_64-20190524.exe(官网)(可能会在rubyinstaller下载时会有勾选,不用管,重复下载也行)
 rubyinstaller-2.6.5-1-x64.exe(官网)(WITH DEVKIT带DEVKIT的版本)(下载时全选)(下载后不用再附加下载其他东西)
+~~~
 ![My helpful screenshot](/assets/img/1.png)
 
 2.下载包
