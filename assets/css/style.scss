@@ -45,9 +45,9 @@
         }
     }
     #red {background-color: orangered;}
-    #qiuri { background-image: url('{{ site.baseurl }}/assets/textures/qiuri.jpg'); }
+    #qiuri { background-color: white; }
     #black { background-color: #111; }
-    #yuhui { background-image: url('{{ site.baseurl }}/assets/textures/yuhui.jpg'); }
+    #yuhui { background-color: white; }
     #green { background-color: mediumseagreen; }
 }
 {%- endif -%}

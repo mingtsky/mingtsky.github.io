@@ -34,7 +34,7 @@ git init (初始化,会在目录下创建一个.git文件夹)
 git add . (添加到本地缓存)
 git commit -m "修改提示"
 git remote add origin git@github.com:mingtsky/mingtsky.github.io.git (如果已有,可通过git remote rm origin清空记录)
-git push -u origin master (上传到仓库)
+git push -u origin master (上传到仓库)(第一次上传后,都用git push上传)
 
 7.写文章时就往_post直接添加md文件就行,图片往/assets/img添加
 
