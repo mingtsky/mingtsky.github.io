@@ -1,0 +1,128 @@
+---
+layout: post
+title:  "2019-11-16-01"
+description: 凭感觉走
+date:   2019-11-16
+tags: python session伪造 Unicode欺骗
+excerpt_separator: ~~~
+---
+凭感觉走
+~~~
+writeup参考:
+{% highlight python%}
+https://skysec.top/2018/11/12/2018-HCTF-Web-Writeup/#admin
+{% endhighlight %}  
+## 信息搜集:
+拿到题目  
+{% highlight python%}
+http://admin.2018.hctf.io/
+{% endhighlight %}
+f12查看源代码  
+{% highlight python%}
+<!-- you are not admin -->  
+{% endhighlight %}
+发现提示要成为admin,随便注册个账号，登入后，在  
+{% highlight python%}
+view-source:http://admin.2018.hctf.io/change  
+{% endhighlight %}
+发现提示  
+{% highlight python%}
+<!-- https://github.com/woadsl1234/hctf_flask/ -->  
+{% endhighlight %}
+于是下载源码  
+## 功能分析
+拿到代码后，简单的查看了下路由
+{% highlight python%}
+@app.route('/index')
+def index():
+
+@app.route('/register', methods = ['GET', 'POST'])
+def register():
+
+@app.route('/login', methods = ['GET', 'POST'])
+def login():
+
+@app.route('/logout')
+def logout():
+
+@app.route('/change', methods = ['GET', 'POST'])
+def change():
+
+@app.route('/edit', methods = ['GET', 'POST'])
+def edit():
+{% endhighlight %}
+查看一下路由，功能非常单一：登录，改密码，退出，注册，edit。  
+但edit功能也是个假功能，并且发现并不会存在sql注入之类的问题，也没有文件写入或者是一些危险的函数，此时陷入了困境。
+## 初步探索
+想到的第一个方法：session伪造  
+于是尝试伪造session，根据ph写的文章  
+{% highlight python%}
+https://www.leavesongs.com/PENETRATION/client-session-security.html  
+{% endhighlight %}
+可以知道flask仅仅对数据进行了签名。众所周知的是，签名的作用是防篡改，而无法防止被读取。而flask并没有提供加密操作，所以其session的全部内容都是可以在客户端读取的，这就可能造成一些安全问题。  
+所以我们构造脚本
+{% highlight python%}
+#!/usr/bin/env python3
+import sys
+import zlib
+from base64 import b64decode
+from flask.sessions import session_json_serializer
+from itsdangerous import base64_decode
+
+def decryption(payload):
+    payload, sig = payload.rsplit(b'.', 1)
+    payload, timestamp = payload.rsplit(b'.', 1)
+
+    decompress = False
+    if payload.startswith(b'.'):
+        payload = payload[1:]
+        decompress = True
+
+    try:
+        payload = base64_decode(payload)
+    except Exception as e:
+        raise Exception('Could not base64 decode the payload because of '
+                         'an exception')
+
+    if decompress:
+        try:
+            payload = zlib.decompress(payload)
+        except Exception as e:
+            raise Exception('Could not zlib decompress the payload before '
+                             'decoding the payload')
+
+    return session_json_serializer.loads(payload)
+
+if __name__ == '__main__':
+    print(decryption(sys.argv[1].encode()))
+
+{% endhighlight %}
+然后可以尝试读取我们的session内容
+![My helpful screenshot](/assets/img/2019-11-16-01/2018-11-10-16-03-07.png)  
+此时容易想到伪造admin得到flag，因为看到代码中
+![My helpful screenshot](/assets/img/2019-11-16-01/2018-11-10-16-03-45.png)  
+想到把name伪造为admin，于是github上找了个脚本
+{% highlight python%}
+https://github.com/noraj/flask-session-cookie-manager
+{% endhighlight %}
+尝试伪造  
+{% highlight python%}
+{u'csrf_token': 'bedddc7469bf16ac02ffd69664abb7abf7e3529c', u'user_id': u'1', u'name': u'admin', u'image': 'aHme', u'_fresh': True, u'_id': '26a01e32366425679ab7738579d3ef6795cad198cd94529cb495fcdccc9c3c864f851207101b38feb17ea8e7e7d096de8cad480b656f785991abc8656938182e'}
+{% endhighlight %}
+但是需要SECRET_KEY  
+我们发现config.py中存在
+{% highlight python%}
+SECRET_KEY = os.environ.get('SECRET_KEY') or 'ckj123'  
+{% endhighlight %}
+于是尝试ckj123  
+![My helpful screenshot](/assets/img/2019-11-16-01/2018-11-10-16-07-13.png)  
+但是比赛的时候很遗憾，最后以失败告终，当时以为key不是SECRET_KEY，就没有深究  
+后来发现问题https://graneed.hatenablog.com/entry/2018/11/11/212048  
+似乎python3和python2的flask session生成机制不同
+![My helpful screenshot](/assets/img/2019-11-16-01/2018-11-12-20-09-38.png)  
+改用python3生成即可成功伪造管理员(用burpsite抓包然后放到repeater里修改,再go就行)
+## 解法二：Unicode欺骗(见参考吧)
+## 知识点:
+1.python的flask框架存在的"本地session"漏洞,可以伪造seesioin身份(在知道SECRET_KEY后)  
+2.cookie,session和token的一些问题 参考:https://www.cnblogs.com/xiaozhang2014/p/7750200.html  https://segmentfault.com/a/1190000017831088  
+3.python的twisted库的nodeprep.prepare函数存在漏洞(unicode欺骗)
