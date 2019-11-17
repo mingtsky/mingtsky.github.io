@@ -45,24 +45,13 @@
         }
     }
     #red {background-color: orangered;}
-<<<<<<< HEAD
-    #blue { background-color: lightblue; }
-    #black { background-color: #111; }
-    #purple { background-color: rebeccapurple; }
-=======
     #qiuri { background-image: url('{{ site.baseurl }}/assets/textures/qiuri.jpg'); }
     #black { background-color: #111; }
     #yuhui { background-image: url('{{ site.baseurl }}/assets/textures/yuhui.jpg'); }
->>>>>>> 修改
     #green { background-color: mediumseagreen; }
 }
 {%- endif -%}
 // Textures
-<<<<<<< HEAD
-.texture-black {
-    background-image: url('{{ site.baseurl }}/assets/textures/black.jpg');
-
-=======
 .texture-qiuri {
     background-image: url('{{ site.baseurl }}/assets/textures/qiuri.jpg');
     background-size: 1300px 900px; //这将设置为图片的宽高都是100% 去适应div的大小,220vh 90vh
@@ -83,7 +72,6 @@
 }
 .texture-black {
     background-image: url('{{ site.baseurl }}/assets/textures/black.jpg');
->>>>>>> 修改
     h2 {
         color: #999;
     }
