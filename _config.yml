@@ -31,7 +31,7 @@ plugins:
 
 texture:
   title: ღinɠڂ sҜჟ
-  tagline: ႟༆
+  tagline: ~༆"
   date_format: "%b %-d, %Y"
   style: [qiuri|yuhui|yellow|red|black|blue|green|purple]
   showPicker: [false|true] # show the texture selector(development purposes)

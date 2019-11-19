@@ -61,7 +61,3 @@ git push -u origin master (上传到仓库)(第一次上传后,都用git push上
 1.```https://blog.csdn.net/u012168038/article/details/77715439``` (git的部分看这个)  
  
 2.```https://www.cnblogs.com/zjjDaily/p/8695978.html``` (很全和关键)
-
-3.```https://github.com/knightyun/knightyun.github.io/tree/master/assets/css```(构建时参考了tag和search功能)
-
-4```http://jekyllthemes.org/```(jekyll主题选择)

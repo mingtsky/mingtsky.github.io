@@ -1,0 +1,46 @@
+---
+layout: post
+title:  "博客修改"
+description: 无聊至极?
+date:   2019-11-18
+tags: 环境搭建 ps
+excerpt_separator: ~~~
+---
+无聊至极?
+
+~~~  
+## 修改css高亮
+删除影响文章布局的框(为了与其他文案保持左右标齐)
+
+![My helpful screenshot](/assets/img/博客修改/1.png)
+
+置外框透明(不然多层颜色会很花)
+
+![My helpful screenshot](/assets/img/博客修改/2.png)
+
+删除padding(为了与其他文案保持左右标齐)
+
+![My helpful screenshot](/assets/img/博客修改/3.png)
+
+![My helpful screenshot](/assets/img/博客修改/4.png)
+
+添加圆角,修改字体和背景颜色
+
+![My helpful screenshot](/assets/img/博客修改/5.png)
+
+最终状态
+
+![My helpful screenshot](/assets/img/博客修改/6.png)
+
+## 修改背景图片大小
+
+![My helpful screenshot](/assets/img/博客修改/7.png)
+
+## 添加tag和search,并自己做了一定修改
+
+## 知识点
+1.```https://github.com/knightyun/knightyun.github.io/tree/master/assets/css```(构建时参考了tag和search功能)
+
+2.```http://jekyllthemes.org/```(jekyll主题选择)
+
+3.ps修改图片大小
