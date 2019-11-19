@@ -1,0 +1,32 @@
+---
+layout: post
+title:  "高亮css修改"
+description: 无聊至极?
+date:   2019-11-18
+tags: 环境搭建
+excerpt_separator: ~~~
+---
+无聊至极?
+
+~~~  
+删除影响文章布局的框(为了与其他文案保持左右标齐)
+
+![My helpful screenshot](/assets/img/高亮css修改/1.png)
+
+置外框透明(不然多层颜色会很花)
+
+![My helpful screenshot](/assets/img/高亮css修改/2.png)
+
+删除padding(为了与其他文案保持左右标齐)
+
+![My helpful screenshot](/assets/img/高亮css修改/3.png)
+
+![My helpful screenshot](/assets/img/高亮css修改/4.png)
+
+添加圆角,修改字体和背景颜色
+
+![My helpful screenshot](/assets/img/高亮css修改/5.png)
+
+最终状态
+
+![My helpful screenshot](/assets/img/高亮css修改/6.png)

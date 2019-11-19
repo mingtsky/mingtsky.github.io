@@ -135,7 +135,7 @@ header {
 			right: 80px;
 		}
 		div.highlight {
-			padding: 30px 80px;
+			
 		}
 	}
 
@@ -145,7 +145,7 @@ header {
 			right: 100px;
 		}
 		div.highlight {
-			padding: 30px 100px;
+
 		}
 	}
 }
@@ -202,6 +202,11 @@ header {
 			border-bottom: 1px solid $lightGray;
 		}
 	}
+}
+
+.post{
+	font-family:Cursive;
+	color:#3acfc4;
 }
 
 .posts, .post-container {

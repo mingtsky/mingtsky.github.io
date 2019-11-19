@@ -1,6 +1,6 @@
-title: Texture Theme
-author: GitHub User
-email: your-email@domain.com
+title: ღinɠڂ sҜჟ
+author: ღinɠڂ sҜჟ
+email: 247538236@qq.com
 description: > # this means to ignore newlines until "show_exerpts:"
   Write an awesome description for your new site here. You can edit this
   line in _config.yml. It will appear in your document head meta (for
@@ -14,6 +14,7 @@ baseurl: #一般置空就行
 sass:
   sass_dir: _sass
  
+highlighter: rouge
 
 # If you want to link only specific pages in your header, uncomment
 # this and add the path to the pages in order as they should show up
@@ -40,6 +41,6 @@ texture:
   showNav: true
 
   social_links:
-    twitter: thelehhman
-    github:  thelehhman
-    linkedIn: in/thelehhman # format: locale/username
+    twitter: mingtsky
+    github:  mingtsky
+    linkedIn: CHINA/Mingtsky # format: locale/username

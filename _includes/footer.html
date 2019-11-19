@@ -22,8 +22,13 @@
 		<div id="yuhui"></div>		
 		<div id="green"></div>
 	</div>
-	<p class="info">You can use the <b>showPicker</b> property in _config.yml to hide this picker permanently.</p>
-	<p class="info">You can use the <b>texture</b> property in _config.yml to apply a texture permanently.</p>
+	<p class="info search">
+	    <!-- <i class="material-icons search-icon search-start">search</i> -->
+	    <input type="text" class="search-input" placeholder="Searching...(支持正则表达)" />
+	    <!-- <i class="material-icons search-icon search-clear">clear</i> -->
+		<div class="search-results"></div>
+	</p>
+	<p class="info">You can link to the <b><a href="{{ site.url }}/tags">tags</a></b> for selecting items from the one of tags</p>
 </div>
 <script src="{{ "/assets/js/picker.js" | relative_url }}"></script>
 {%- endif -%}

