@@ -53,7 +53,7 @@
 {%- endif -%}
 // Textures
 .texture-qiuri {
-    background-image: url('{{ site.baseurl }}/assets/textures/qiuri.jpg');
+    background-image: url('{{ site.baseurl }}/assets/textures/qiuri1.jpg');
     background-size: 1300px 900px; //这将设置为图片的宽高都是100% 去适应div的大小,220vh 90vh
     background-repeat: no-repeat; //这将设置图片 不重铺 图片会被拉伸和缩小；
     background-position: 0px -250px;
@@ -62,7 +62,7 @@
     }
 }
 .texture-yuhui {
-    background-image: url('{{ site.baseurl }}/assets/textures/yuhui.jpg');
+    background-image: url('{{ site.baseurl }}/assets/textures/yuhui1.jpg');
     background-size: 1300px 700px;
     background-repeat: no-repeat; 
     background-position: 0px -100px;

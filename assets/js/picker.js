@@ -7,7 +7,7 @@ window.onload = function() {
 	const $picker = document.querySelector('#texture-picker');
 	const $hidePicker = document.querySelector('#hidePicker');
 	const $header = document.querySelector('header');
-	$header.setAttribute('class', `texture-black`);
+	$header.setAttribute('class', `texture-yuhui`);
 	
 	$picker.onclick = function(e) {
 		const textureName = e.target.id;
