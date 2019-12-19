@@ -1,12 +1,16 @@
 ---
 layout: post
 title:  "博客修改"
-description: 无聊至极?
+description: 博物馆是收藏文明的宝库,人类历史长河里的精华,依然在那里默默流动,在那里轻轻呼吸
 date:   2019-11-18
 tags: 环境搭建 ps
 excerpt_separator: ~~~
 ---
-无聊至极?
+1.https://github.com/knightyun/knightyun.github.io/tree/master/assets/css (构建时参考了tag和search功能)
+
+2.http://jekyllthemes.org/(jekyll主题选择)
+
+3.ps修改图片大小
 
 ~~~  
 ## 修改css高亮

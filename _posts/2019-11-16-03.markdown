@@ -6,7 +6,15 @@ date:   2019-11-16
 tags: 文件上传 zip 软连接 python session伪造 重要信息文件
 excerpt_separator: ~~~
 ---
-樱花落下的速度是每秒五厘米
+1.上传zip文件时,存在任意文件读取漏洞,通过构造软连接完成(+1)
+
+2./etc/passwd里记录了一些重要配置信息
+
+3./proc/self/environ中有重要的环境变量
+
+4.发现python是3.6版本的，那么即可尝试预测随机数
+
+5.python的flask框架存在的"本地session"漏洞,可以伪造seesioin身份(在知道SECRET_KEY后)(+1)
 
 ~~~  
 writeup参考:```https://www.anquanke.com/

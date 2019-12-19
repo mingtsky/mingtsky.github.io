@@ -6,7 +6,11 @@ date:   2019-11-16
 tags: python session伪造 Unicode欺骗
 excerpt_separator: ~~~
 ---
-深呼吸,感受这世界的气息
+1.python的flask框架存在的"本地session"漏洞,可以伪造seesioin身份(在知道SECRET_KEY后)  
+
+2.cookie,session和token的一些问题 参考:https://www.cnblogs.com/xiaozhang2014/p/7750200.html https://segmentfault.com/a/1190000017831088
+
+3.python的twisted库的nodeprep.prepare函数存在漏洞(unicode欺骗)
 
 ~~~  
 writeup参考:```https://skysec.top/2018/11/12/2018-HCTF-Web-Writeup/#admin```

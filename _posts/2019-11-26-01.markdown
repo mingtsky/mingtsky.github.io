@@ -1,0 +1,106 @@
+---
+layout: post
+title:  "2019-11-26-01"
+description: 虽然素昧平生,但是骨肉相连
+date:   2019-11-26
+tags: php http走私攻击 php字符串解析 绕过waf
+excerpt_separator: ~~~
+---
+1.http走私攻击 参考:https://paper.seebug.org/1048/
+
+2.利用PHP的字符串解析特性Bypass,如加空格绕过waf 参考:https://www.freebuf.com/articles/web/213359.html
+
+3.php几个好用的函数
+
+~~~
+## 题目描述
+
+![My helpful screenshot](/assets/img/2019-11-26-01/1.png)
+
+F12查看源码
+
+![My helpful screenshot](/assets/img/2019-11-26-01/2.png)
+
+有waf和一个calc.php网页，我们先打开这个网页看看是什么(我做时真没留意直接打开calc.php)
+
+![My helpful screenshot](/assets/img/2019-11-26-01/3.png)
+
+打开后直接给出了源码，我们可以看见过滤了一些特殊字符，然后eval执行我们的命令，想着前面的waf，不可能是这样简单的，我们先试试传入一些字符试试。
+
+![My helpful screenshot](/assets/img/2019-11-26-01/4.png)
+
+当我传入字符时，waf拦截了我们的请求
+
+题目的突破点：
+
+只能传入数字和运算符号，不能传入字符（想办法绕过waf）
+
+两种方法:
+## http走私攻击 参考:```https://paper.seebug.org/1048/```
+这道题:
+
+为什么使用cl-cl可以绕过waf?
+
+首先,我们先看下对代理的解释
+
+![My helpful screenshot](/assets/img/2019-11-26-01/7.png)
+
+我的理解是:代理服务器发现有两个cl,不符合该服务器规定,但在返回400错误的同时又将该请求转给了后端服务器(可以发现响应包里有两份文档,我认为一份是代理服务器返回给本机的400错误文档,一份是后端服务器传回代理服务器再传回本机的文档).而字母的过滤是在代理服务器过滤的(后端calc.php的源码上没有对字母进行过滤,推测是在代理服务器进行的过滤),当返回400错误同时转发给后端服务器时,可以很好地绕过代理服务器的过滤
+
+这里的利用和参考链接里的应用不一样
+
+![My helpful screenshot](/assets/img/2019-11-26-01/5.png)
+
+下面这一种是cl-te式
+
+![My helpful screenshot](/assets/img/2019-11-26-01/6.png)
+
+其它几种请求走私依旧可以，就不测试了
+
+可能用得到的几个函数
+
+```scandir() 函数``` 返回指定目录中的文件和目录的数组。
+
+```base_convert() 函数``` 在任意进制之间转换数字，返回一个字符串
+
+```dechex() 函数```：把十进制转换为十六进制。
+
+```hex2bin() 函数```：把十六进制值的字符串转换为 ASCII 字符。
+
+```readfile() 函数```
+输出一个文件。
+该函数读入一个文件并写入到输出缓冲。若成功，则返回从文件中读入的字节数。若失败，则返回 false。您可以通过 @readfile() 形式调用该函数，来隐藏错误信息
+
+## PHP字符串解析特性绕过WAF
+
+输入时发现num只能输入数字，输入字符无法解析。
+
+这里可以利用php的字符串解析特性绕过bypass：利用PHP的字符串解析特性Bypass(参考:```https://www.freebuf.com/articles/web/213359.html```)
+
+所以我们可以在num前加个空格绕过waf
+
+http://www.xxx.com/index.php? num=phpinfo()
+
+所以最后构造:(var_dump用来输出数据)
+```
+http://node3.buuoj.cn:29179/calc.php? num=var_dump(scandir(chr(47)))
+```
+```
+(hex2bin(dechex(47))也可以得到/)
+```
+接着输入:
+```
+http://node3.buuoj.cn:29179/calc.php?%20num=file_get_contents(chr(47).chr(102).chr(49).chr(97).chr(103).chr(103))
+```
+或者
+```
+calc.php? num=1;var_dump(file_get_contents(chr(47).chr(102).chr(49).chr(97).chr(103).chr(103)))
+```
+最后得到flag
+
+## 知识点:
+1.http走私攻击 参考:https://paper.seebug.org/1048/
+
+2.利用PHP的字符串解析特性Bypass,如加空格绕过waf 参考:https://www.freebuf.com/articles/web/213359.html
+
+3.php几个好用的函数

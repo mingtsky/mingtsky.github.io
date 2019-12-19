@@ -1,0 +1,112 @@
+---
+layout: post
+title:  "2019-11-19-01"
+description: 天气真的是很不可思议，光只是天空的模样就让人感动不已
+date:   2019-11-19
+tags: 双重编码 文件包含 php
+excerpt_separator: ~~~
+---
+1.双重编码，比如你将?双重编码的话，经过包含时你包含的文件会被当成一个目录(利用文件包含)
+
+~~~
+## Ready
+拿到题目先f12看了下网页代码,发现有一行注释
+```
+<!--source.php-->
+```
+于是打开<!--source.php-->发现php代码:
+```php
+<?php
+    highlight_file(__FILE__);
+    class emmm
+    {
+        public static function checkFile(&$page)
+        {
+            $whitelist = ["source"=>"source.php","hint"=>"hint.php"];
+            if (! isset($page) || !is_string($page)) {
+                echo "you can't see it";
+                return false;
+            }
+
+            if (in_array($page, $whitelist)) {
+                return true;
+            }
+
+            $_page = mb_substr(
+                $page,
+                0,
+                mb_strpos($page . '?', '?')
+            );
+            if (in_array($_page, $whitelist)) {
+                return true;
+            }
+
+            $_page = urldecode($page);
+            $_page = mb_substr(
+                $_page,
+                0,
+                mb_strpos($_page . '?', '?')
+            );
+            if (in_array($_page, $whitelist)) {
+                return true;
+            }
+            echo "you can't see it";
+            return false;
+        }
+    }
+
+    if (! empty($_REQUEST['file'])
+        && is_string($_REQUEST['file'])
+        && emmm::checkFile($_REQUEST['file'])
+    ) {
+        include $_REQUEST['file'];
+        exit;
+    } else {
+        echo "<br><img src=\"https://i.loli.net/2018/11/01/5bdb0d93dc794.jpg\" />";
+    }  
+?>
+```
+很显然可以看出
+
+1.url必须有?file=hint.php或file=source.php
+
+2.有include,说明存在文件包含漏洞,得构造一段代码读取相应文件
+
+但我看完这段代码其实有点懵,
+```php
+$_page = mb_substr(
+    $page,
+    0,
+    mb_strpos($page . '?', '?')
+);
+```
+不是没变化吗?如果输入的$page是hint.php,$_page最后结果也是hint.php,倒退回来只能输入hint.php?????
+
+后来看了writeup,是我想太少了....
+
+我忽略了以下地方:
+
+1.虽然我打开了hint.php,但只注意到了开头的,没注意到后面,而后面的```ffffllllaaaagggg```是flag存在的文件
+
+![My helpful screenshot](/assets/img/2019-11-19-01/1.png)
+
+2.想让$_page最后结果也是hint.php,其实还可以输入hint.php?......,因为它是从第一个?开始截断(没留意到呜呜呜)
+
+3.双重编码可以使输入的hint.php作为目录????
+
+(题目给的源代码里有提示了(urldecode()...))
+
+(双重编码，比如你将?双重编码的话，经过包含时你包含的文件会被当成一个目录)好吧好吧....
+
+
+所以构造如下:(%253f是将?两次url编码得到)
+```
+http://f978ff71-ab07-4988-af05-9fbca99b628a.node3.buuoj.cn/?file=source.php%253f../ffffllllaaaagggg
+```
+最后一步就差逐级回退找到```ffffllllaaaagggg```,不断加入../看看是否得到文件内容,最终得到结果
+
+![My helpful screenshot](/assets/img/2019-11-19-01/2.png)
+
+![My helpful screenshot](/assets/img/2019-11-19-01/3.png)
+## 知识点:
+1.双重编码，比如你将?双重编码的话，经过包含时你包含的文件会被当成一个目录(利用文件包含)

@@ -6,9 +6,11 @@ date:   2019-11-14
 tags: python php 命令执行
 excerpt_separator: ~~~
 ---
-将两件熟悉却无相关的事物刻意联系到一起，可以加强冲突场景的记忆
+1.python脚本多线程和一次提交多个payload  
 
-将一件熟悉和一件陌生的事物联系到一起，可以加强对陌生事物的记忆
+2.本地搭php环境测试  
+
+3.eval和system用法(echo是linux命令,不是php命令),system()命令执行漏洞,通过get的方法传递参数
 
 ~~~  
 ## Ready

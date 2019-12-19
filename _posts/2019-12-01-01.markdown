@@ -1,0 +1,123 @@
+---
+layout: post
+title:  "2019-12-01-01"
+description: 一个时代为什么样的人点赞,往往反应着这个时代的底色
+date:   2019-12-01-01
+tags: cookie伪造 python jwt
+excerpt_separator: ~~~
+---
+1.pickle反序列化漏洞 参考:https://www.jianshu.com/p/8fd3de5b4843
+
+2.cookie伪造admin身份登陆
+
+3.jwt密钥爆破
+
+~~~
+进入网站后正常先注册，然后进入页面。
+
+![My helpful screenshot](/assets/img/2019-12-01-01/1.png)
+
+这里正常的先尝试购买，购买后发现资金募集这里增加了购买物品的金额，个人中心里剩余金额减少了购买时的实际付款
+
+这里是想到了抓包，然后直接改金额尝试，但看到上面的提示说要买lv6，简单翻了几页并没有发现lv6，这时候看到url有page参数，来进行修改，发现到500都还有，这就不能手工找了，简单写个脚本来找
+
+![My helpful screenshot](/assets/img/2019-12-01-01/2.png)
+
+这里检查页面元素可以发现lv4，lv5都是以图片形式加载的，图片名分别对应为lv4.png，lv5.png
+```python
+from urllib import request
+
+url = "http://web44.buuoj.cn/shop?page="
+
+for i in range(1000):
+    response = request.urlopen(url+str(i))
+    if "lv6.png" in response.read().decode('utf-8'):
+        print(i)
+        break
+```
+可以看到181页，找到了lv6
+
+![My helpful screenshot](/assets/img/2019-12-01-01/3.png)
+
+可以看到高贵的lv6果然是天价，这时候，就试着来尝试抓包改价格了
+
+![My helpful screenshot](/assets/img/2019-12-01-01/4.png)
+
+可以看到有价格和打折额度，但是无论将价格改为0还是将折扣改为0，都显示操作失败…
+
+![My helpful screenshot](/assets/img/2019-12-01-01/5.png)
+
+好吧看了下大佬的writeup这里不要改为0，改为很小的数就行了.
+尝试之后发现是只能更改折扣那里的值，这算是一个逻辑漏洞吧，然后会进行一个重定向
+
+![My helpful screenshot](/assets/img/2019-12-01-01/6.png)
+
+我们进入302跳转后的页面，可以看到提示要求admin才能登陆
+
+![My helpful screenshot](/assets/img/2019-12-01-01/7.png)
+
+这时候肯定是想着去看cookie值，在哪里把用户名进行替换
+
+可以看上面上面的图，里面的cookie里面有JWT（JSON Web Token）
+
+![My helpful screenshot](/assets/img/2019-12-01-01/8.png)
+
+可以看到解析结果果然有用户名，这时候我们就需要来对它进行替换（这里我也想过重新注册一个名为admin的用户，结果不给注册，这个骚操作行不通）
+用 c-jwt-cracker来跑密钥
+
+![My helpful screenshot](/assets/img/2019-12-01-01/9.png)
+
+![My helpful screenshot](/assets/img/2019-12-01-01/18.png)
+
+可以看到成功的跑出了密钥
+
+![My helpful screenshot](/assets/img/2019-12-01-01/10.png)
+
+用得到的密钥生成admin的JWT，然后cookie进行修改，页面就正常显示了(我是用burp抓包修改,然后forward(继续下个页面))
+
+![My helpful screenshot](/assets/img/2019-12-01-01/11.png)
+
+检查源码发现友军给我们留下了好东西
+
+![My helpful screenshot](/assets/img/2019-12-01-01/12.png)
+
+把源码下载回来
+
+![My helpful screenshot](/assets/img/2019-12-01-01/13.png)
+
+是一堆py文件，python代码审计又是第一次遇到，又懵逼…看了看大佬的writeup，说是有python的反序列化漏洞…前面一直说看python反序列化漏洞来着…(我发现有个地方有引导,就是该页面抓包可以发现提交了额外的参数,可以照着这一个点寻下去,也可以发现序列化的问题!!!!)
+
+首先看反序列化部分的代码吧
+
+![My helpful screenshot](/assets/img/2019-12-01-01/14.png)
+
+可以看到这里用的是tornado框架，这个框架用的好像比较少，好像是停止更新了吧
+get_argument是tornado获取参数的方法，不区分get和post
+
+![My helpful screenshot](/assets/img/2019-12-01-01/15.png)
+
+可以看到我们提交过去的body里面确实有become参数
+
+这里可以利用pickle反序列化漏洞
+```python
+import pickle
+import urllib
+
+class payload(object):
+    def __reduce__(self):
+       return (eval, ("open('/flag.txt','r').read()",))
+
+a = pickle.dumps(payload())
+a = urllib.quote(a)
+print a
+#c__builtin__%0Aeval%0Ap0%0A%28S%22open%28%27/flag.txt%27%2C%27r%27%29.read%28%29%22%0Ap1%0Atp2%0ARp3%0A.
+```
+
+![My helpful screenshot](/assets/img/2019-12-01-01/17.png)
+
+## 知识点:
+1.pickle反序列化漏洞 参考:https://www.jianshu.com/p/8fd3de5b4843
+
+2.cookie伪造admin身份登陆
+
+3.jwt密钥爆破
