@@ -9,7 +9,7 @@ excerpt_separator: ~~~
 1.ssrf内网攻击
 
 2.hash哈希长度扩展攻击 参考: http://shaobaobaoer.cn/archives/535/hash%E9%95%BF%E5%BA%A6%E6%89%A9%E5%B1%95%E6%94%BB%E5%87%BB-by-shaobaobaoer
-
+(见2019-12-02-01的分析)
 ~~~
 首先打开网站
 

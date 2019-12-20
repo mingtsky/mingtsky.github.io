@@ -1,0 +1,167 @@
+---
+layout: post
+title:  "2019-12-02-01"
+description: 不醉不归
+date:   2019-12-02-01
+tags: hash哈希长度扩展攻击 python
+excerpt_separator: ~~~
+---
+1.hash哈希长度扩展攻击(+1) 参考: http://shaobaobaoer.cn/archives/535/hash%E9%95%BF%E5%BA%A6%E6%89%A9%E5%B1%95%E6%94%BB%E5%87%BB-by-shaobaobaoer
+
+~~~
+直接拿上面的链接进行分析:
+
+原题:
+```php
+<?php 
+
+$flag = "flag{flag is here}";
+$secret = "aaaaabbbbbccccc"; // This secret is 15 characters long for security!
+
+@$username = $_POST["username"];
+@$password = $_POST["password"];
+if (!empty($_COOKIE["getmein"])) {
+    if (urldecode($username) === "admin" && urldecode($password) != "admin") {
+        if ($_COOKIE["getmein"] === md5($secret . urldecode($username . $password))) {
+            echo "Congratulations! You are a registered user.\n";
+            die ("The flag is ". $flag);
+        }
+        else {
+            die ("Your cookies don't match up! STOP HACKING THIS SITE.");
+        }
+    }
+    else {
+        die ("You are not an admin! LEAVE.");
+    }
+}
+
+setcookie("sample-hash", md5($secret . urldecode("admin" . "admin")), time() + (60 * 60 * 24 * 7));
+
+if (empty($_COOKIE["source"])) {
+    setcookie("source", 0, time() + (60 * 60 * 24 * 7));
+}
+else {
+    if ($_COOKIE["source"] != 0) {
+        echo ""; // This source code is outputted here
+    }
+}
+?>
+```
+这里简化为:
+```php
+<?php
+$SECRET="123456";(我们是不知道的)
+$auth = "I_L0vE_L0li";
+if (isset($_COOKIE["auth"])) {
+    $hsh = $_COOKIE["hsh"];
+    if ($hsh !== md5($SECRET . $_COOKIE["auth"])) {
+        die("F4ck_U!");
+    }
+} else {
+    setcookie("auth", $auth);
+    setcookie("hsh", md5($SECRET . $auth));
+    die("F4ck_U!");
+}
+die("I_aM_A_L0li_dA_Yo~");
+?>
+```
+我们将题目继续简化:
+```
+已知:
+1.md5(x+a)(但我们不知道x的值,知道a的值)
+2.x的长度
+
+求:
+一组y和z,使得md5(y+x)=z
+
+解法:
+将y构造成
+a..................(与x+a的512字节相同,即补位)+k(k为第二组的512字节)
+由hash拓展攻击得:
+md5(x+y)=md5(x+a)作为初始序列与第二分组(即k)得到
+所以:
+由任意的k就可以得出一组符合条件的y和z
+```
+以下为测试:
+
+(1)用powershell或者在线md5工具等方式计算md5(x+a)
+```
+x:123456(实际未知)
+a:I_L0vE_L0li
+md5(x+a):d607a0da7fd77724621092333d8fdee8
+```
+![My helpful screenshot](/assets/img/2019-12-02-01/1.png)
+
+(2)通过hashpump计算出
+```
+k=whaleCTF
+y=I_L0vE_L0li\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x88\x00\x00\x00\x00\x00\x00\x00whaleCTF
+z=57105e676f1e378fe5d6435d3a285c8a
+```
+![My helpful screenshot](/assets/img/2019-12-02-01/2.png)
+
+(3)我们验证下.将上面的y用python写入文件
+```python
+import struct
+import hashlib
+ 
+list_dec = [1, 2, 3, 4, 53, 100, 220, 244, 255]
+list_a = b''
+list_dec2 = b"123456I_L0vE_L0li\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x88\x00\x00\x00\x00\x00\x00\x00whaleCTF"
+# for x in list_dec2:
+# 	print(x)
+# for x in list_dec:
+# 	print(x)
+with open('test.txt', 'ab+')as fp:
+    for x in list_dec2:
+        a = struct.pack('B', x)
+        # list_a = list_a + a
+        fp.write(a)
+# print(list_dec2)
+# print('done')
+# print(list_a)
+m = hashlib.md5()
+m.update(list_a)
+str_md5 = m.hexdigest()
+print(str_md5)
+```
+
+![My helpful screenshot](/assets/img/2019-12-02-01/3.png)
+
+![My helpful screenshot](/assets/img/2019-12-02-01/4.png)
+
+但得到的0F1FA9BF3986006263CCA8F1E0A38C4D与上面得到的z不相等
+
+(4)这个地方我想了很久,也做了测试,发现问题是,记事本显示出来的ascll码不能直接用来求md5,无论是用powershell求该文件的md5还是将显示出来的ascll码作为字符串直接求md5,都是不准确的,因为有一部分编码无法显示,会显示乱码,应该直接对十六进制码求md5
+
+我写的python脚本如下:
+```python
+import struct
+import hashlib
+ 
+list_dec = [1, 2, 3, 4, 53, 100, 220, 244, 255]
+list_a = b''
+list_dec2 = b"123456I_L0vE_L0li\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x88\x00\x00\x00\x00\x00\x00\x00whaleCTF"
+# for x in list_dec2:
+# 	print(x)
+# for x in list_dec:
+# 	print(x)
+with open('test.txt', 'ab+')as fp:
+    for x in list_dec2:
+        a = struct.pack('B', x)
+        list_a = list_a + a
+        fp.write(a)
+# print(list_dec2)
+# print('done')
+# print(list_a)
+m = hashlib.md5()
+m.update(list_a)
+str_md5 = m.hexdigest()
+print(str_md5)
+```
+![My helpful screenshot](/assets/img/2019-12-02-01/5.png)
+
+得出来的md5:57105e676f1e378fe5d6435d3a285c8a,与上面得出来的c相等,攻击完成
+
+## 知识点:
+1.hash哈希长度扩展攻击(+1) 参考: http://shaobaobaoer.cn/archives/535/hash%E9%95%BF%E5%BA%A6%E6%89%A9%E5%B1%95%E6%94%BB%E5%87%BB-by-shaobaobaoer
